@@ -1,0 +1,18 @@
+FROM python:3.10-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential libpq-dev curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app/backend
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt gunicorn==22.0.0 eventlet==0.36.1
+
+COPY backend/ .
+
+# Socket.IO server: one eventlet worker only (sticky connections).
+EXPOSE 5001
+CMD ["gunicorn", "-w", "1", "-k", "eventlet", "-b", "0.0.0.0:5001", "--access-logfile", "-", "realtime_server:app"]

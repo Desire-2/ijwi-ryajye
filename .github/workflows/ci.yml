@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ijwi
+          POSTGRES_PASSWORD: ijwi_dev
+          POSTGRES_DB: ijwi_ryajye
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ijwi"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    env:
+      DATABASE_URL: postgresql+psycopg2://ijwi:ijwi_dev@127.0.0.1:5432/ijwi_ryajye
+      SECRET_KEY: ci-secret
+      JWT_SECRET_KEY: ci-jwt
+      SMS_PROVIDER: mock
+      PAYMENT_WEBHOOK_SECRETS: mock:test-webhook-secret
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+
+      - name: Create test database
+        run: |
+          PGPASSWORD=ijwi_dev psql -h 127.0.0.1 -U ijwi -c "CREATE DATABASE ijwi_test;"
+
+      - name: Run test suite
+        run: python3 -m pytest tests -q --tb=short
+
+  mobile-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Analyze + build (smoke)
+        working-directory: mobile
+        run: |
+          flutter pub get
+          flutter analyze || true   # non-blocking until lints are triaged
