@@ -16,4 +16,4 @@ COPY . .
 EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=5s CMD curl -fsS http://localhost:5000/health || exit 1
 
-CMD ["gunicorn", "-w", "4", "-k", "gthread", "--threads", "8", "-b", "0.0.0.0:5000", "--access-logfile", "-", "wsgi:app"]
+CMD ["gunicorn", "-w", "2", "-k", "gthread", "--threads", "4", "--worker-tmp-dir", "/dev/shm", "-b", "0.0.0.0:5000", "--access-logfile", "-", "wsgi:app"]
