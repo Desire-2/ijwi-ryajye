@@ -17,6 +17,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _phone = TextEditingController(text: '+250');
   final _password = TextEditingController();
   bool _busy = false;
+  bool _obscure = true;
   String? _error;
 
   @override
@@ -74,9 +75,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: _password,
-              obscureText: true,
+              obscureText: _obscure,
               onSubmitted: (_) => _submit(),
-              decoration: InputDecoration(labelText: tr('password')),
+              decoration: InputDecoration(
+                labelText: tr('password'),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                ),
+              ),
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),

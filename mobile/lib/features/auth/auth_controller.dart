@@ -83,12 +83,14 @@ class AuthController extends StateNotifier<AsyncValue<AppUser?>> {
   Future<String?> register({
     required String phone,
     required String fullName,
+    required String username,
     required String password,
     String role = 'FARMER',
     }) async {
     await _api.postJson('/auth/register', {
       'phone': phone,
       'full_name': fullName,
+      'username': username,
       'password': password,
       'role': role,
     });
@@ -97,7 +99,7 @@ class AuthController extends StateNotifier<AsyncValue<AppUser?>> {
 
   Future<AppUser> verifyOtp({required String phone, required String code}) async {
     final res = await _api.postJson(
-        '/auth/verify_otp', {'phone': phone, 'code': code});
+        '/auth/otp/verify', {'phone': phone, 'code': code});
     final verified = res['verified'] == true;
     if (!verified) throw Exception('Invalid code');
     final tokens =

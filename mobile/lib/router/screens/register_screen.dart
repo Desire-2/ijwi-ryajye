@@ -16,9 +16,11 @@ class RegisterScreen extends ConsumerStatefulWidget {
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _phone = TextEditingController(text: '+250');
   final _name = TextEditingController();
+  final _username = TextEditingController();
   final _password = TextEditingController();
   String _role = 'FARMER';
   bool _busy = false;
+  bool _obscure = true;
   String? _error;
 
   static const _roles = {
@@ -31,19 +33,33 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   void dispose() {
     _phone.dispose();
     _name.dispose();
+    _username.dispose();
     _password.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
+    if (_password.text.length < 8) {
+      setState(() => _error = 'Password must be at least 8 characters');
+      return;
+    }
+    if (_username.text.trim().length < 3) {
+      setState(() => _error = 'Username must be at least 3 characters');
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
       final notifier = ref.read(authProvider.notifier);
-      final err =
-          await notifier.register(phone: _phone.text.trim(), fullName: _name.text.trim(), password: _password.text, role: _role);
+      final err = await notifier.register(
+        phone: _phone.text.trim(),
+        fullName: _name.text.trim(),
+        username: _username.text.trim(),
+        password: _password.text,
+        role: _role,
+      );
       if (err == null && mounted) {
         context.go('/auth/verify?phone=${Uri.encodeComponent(_phone.text.trim())}');
       }
@@ -70,6 +86,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           ),
           const SizedBox(height: 12),
           TextField(
+            controller: _username,
+            textCapitalization: TextCapitalization.none,
+            decoration: const InputDecoration(
+                labelText: 'Username',
+                hintText: 'min. 3 characters, letters and _'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
             controller: _phone,
             keyboardType: TextInputType.phone,
             decoration: InputDecoration(labelText: tr('phone')),
@@ -77,8 +101,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           const SizedBox(height: 12),
           TextField(
             controller: _password,
-            obscureText: true,
-            decoration: InputDecoration(labelText: tr('password')),
+            obscureText: _obscure,
+            decoration: InputDecoration(
+                labelText: 'Password',
+                hintText: 'min. 8 characters',
+                suffixIcon: IconButton(
+                  icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                ),
+            ),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
