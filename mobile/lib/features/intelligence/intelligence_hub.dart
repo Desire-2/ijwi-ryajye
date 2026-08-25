@@ -128,11 +128,13 @@ class _IntelligenceHubScreenState extends ConsumerState<IntelligenceHubScreen>
           ..._aiMessages,
         ],
       });
-      final reply = res['reply'] as Map<String, dynamic>?;
+      final reply = res['reply'];
+      final answer = reply is Map<String, dynamic>
+          ? (reply['answer'] as String? ?? 'Sorry, I could not answer that.')
+          : (reply as String? ?? 'Sorry, I could not answer that.');
       setState(() => _aiMessages.add({
             'role': 'assistant',
-            'content': reply?['answer'] as String? ??
-                (reply is String ? reply : 'Sorry, I could not answer that.'),
+            'content': answer,
           }));
       await Future<void>.delayed(const Duration(milliseconds: 50));
       if (_aiScroll.hasClients) {

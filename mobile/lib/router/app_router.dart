@@ -16,7 +16,7 @@ import '../../features/trade/listing_detail_screen.dart';
 import '../../features/trade/offers_screen.dart';
 import '../../features/trade/orders_screen.dart';
 import '../../features/wallet/wallet_screen.dart';
-import '../auth/auth_controller.dart';
+import '../features/auth/auth_controller.dart';
 import 'screens/home_shell.dart';
 import 'screens/home_tab.dart';
 import 'screens/login_screen.dart';

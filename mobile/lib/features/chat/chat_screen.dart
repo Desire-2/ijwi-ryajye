@@ -57,7 +57,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ? conv['title'] as String
                 : 'Chat';
         _isGroup = (conv['conversation_type'] as String?) == 'GROUP';
-        _messages = ((res['messages'] as List? ?? const []) as List)
+        _messages = (res['messages'] as List? ?? const [])
             .map((j) =>
                 ChatMessage.fromJson(j as Map<String, dynamic>, myUserId: me?.id))
             .toList();
@@ -131,7 +131,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _openAttachSheet() async {
     final listings = await _fetchShareableListings();
     if (!mounted) return;
-    showModalBottomSheet<void>(
+    showModalBottomSheet<ListingRef>(
       context: context,
       builder: (context) => SafeArea(
         child: ListView(children: [
@@ -298,6 +298,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   void dispose() {
+    _composer.dispose();
     _typingTimer?.cancel();
     _socket?.leaveConversation(widget.conversationId);
     super.dispose();
@@ -518,8 +519,4 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
     );
   }
-}
-
-extension _FirstOrNull<T> on List<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }

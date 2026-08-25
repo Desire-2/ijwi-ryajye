@@ -9,7 +9,7 @@ RUN apt-get update \
 
 WORKDIR /app/backend
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt gunicorn==22.0.0 eventlet==0.36.1
+RUN pip install --no-cache-dir -r requirements.txt gunicorn==21.2.0 eventlet==0.36.1
 
 COPY backend/ .
 

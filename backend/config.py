@@ -17,10 +17,10 @@ class BaseConfig:
 
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "DATABASE_URL",
-        "postgresql+psycopg2://ijwi:ijwi_dev@127.0.0.1:5433/ijwi_ryajye",
+        "sqlite:///dev.db",
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True, "pool_size": 10, "max_overflow": 20}
+    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
 
     REDIS_URL = os.environ.get("REDIS_URL", "")
     RATELIMIT_STORAGE_URI = os.environ.get("REDIS_URL") or "memory://"

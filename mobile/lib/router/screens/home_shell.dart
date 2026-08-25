@@ -31,7 +31,8 @@ class HomeShell extends ConsumerWidget {
           (t) => t != null && location.startsWith(t),
           orElse: () => '/',
         )!)
-        .clamp(0, _tabs.length - 1);
+        .clamp(0, _tabs.length - 1)
+        .toInt();
     final tr = ref.watch(trProvider);
     final pending = ref.watch(pendingSyncCountProvider);
     final offline = ref.watch(isOfflineProvider);

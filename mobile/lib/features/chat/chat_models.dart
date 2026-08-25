@@ -1,11 +1,3 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../core/i18n/i18n_provider.dart';
-import '../../core/network/api_client.dart';
-import '../../core/realtime/socket_service.dart';
-import '../auth/auth_controller.dart';
-
 class ChatMessage {
   ChatMessage.fromJson(Map<String, dynamic> j, {required String? myUserId})
       : id = j['id'] as String,

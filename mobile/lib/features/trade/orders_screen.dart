@@ -16,7 +16,7 @@ class OrderRow {
   final String state;
   final int totalMinor;
 
-  bool get needsPayment => state == 'PAID' || state == 'PENDING_PAYMENT';
+  bool get needsPayment => state == 'PENDING_PAYMENT';
 }
 
 class OrdersScreen extends ConsumerStatefulWidget {
@@ -36,7 +36,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
       final api = ref.read(apiClientProvider);
       final res = await api.getJson('/orders', query: {'per_page': '50'});
       setState(() {
-        _items = (res['items'] as List)
+        _items = (res['items'] as List? ?? const [])
             .map((j) => OrderRow.fromJson(j as Map<String, dynamic>))
             .toList();
         _error = null;

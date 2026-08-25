@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
@@ -144,3 +145,9 @@ class LocalDb {
 }
 
 Future<LocalDb> openLocalDb() async => LocalDb();
+
+final localDbProvider = FutureProvider.autoDispose<LocalDb>((ref) async {
+  final db = await openLocalDb();
+  ref.onDispose(() => db.database.then((d) => d.close()));
+  return db;
+});

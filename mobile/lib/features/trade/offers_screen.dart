@@ -35,7 +35,7 @@ class _OffersScreenState extends ConsumerState<OffersScreen> {
       final api = ref.read(apiClientProvider);
       final res = await api.getJson('/offers', query: {'per_page': '50'});
       setState(() {
-        _items = (res['items'] as List)
+        _items = (res['items'] as List? ?? const [])
             .map((j) => OfferRow.fromJson(j as Map<String, dynamic>))
             .toList();
         _error = null;

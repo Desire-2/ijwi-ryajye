@@ -50,6 +50,10 @@ def assert_membership(conversation, user):
 
 
 def next_server_sequence(conversation) -> int:
+    if db.engine.dialect.name == "sqlite":
+        conversation.server_sequence = int(conversation.server_sequence) + 1
+        db.session.flush()
+        return conversation.server_sequence
     row = db.session.execute(
         text("SELECT server_sequence FROM conversations WHERE id = :id FOR UPDATE"),
         {"id": conversation.id},

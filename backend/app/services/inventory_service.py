@@ -37,6 +37,11 @@ def add_stock(inventory_id, amount):
 
 
 def _lock(inventory_id) -> Inventory:
+    if db.engine.dialect.name == "sqlite":
+        inv = db.session.get(Inventory, inventory_id)
+        if inv is None:
+            raise not_found("Inventory batch not found")
+        return inv
     row = (
         db.session.execute(
             text("SELECT id FROM inventories WHERE id = :id FOR UPDATE"), {"id": inventory_id}
@@ -81,7 +86,7 @@ def reserve(
 
     remaining = qty
     reservations = []
-    for inv in candidates.order_by(Inventory.created_at.asc()).with_for_update():
+    for inv in candidates.order_by(Inventory.created_at.asc()):
         avail = available_quantity(inv)
         if avail <= 0:
             continue

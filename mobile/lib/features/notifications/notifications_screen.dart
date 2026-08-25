@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/network/api_client.dart';
 import '../../core/theme/design_system.dart';
+import '../../core/utils/money.dart';
 import '../../shared/widgets/ui.dart';
 
 class NotificationRow {

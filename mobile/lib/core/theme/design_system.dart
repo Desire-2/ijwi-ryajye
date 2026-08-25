@@ -40,7 +40,7 @@ ThemeData buildIjwiTheme() {
       elevation: 0,
       centerTitle: false,
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: IjwiColors.card,
       elevation: 1,
       shape: RoundedRectangleBorder(

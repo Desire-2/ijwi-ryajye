@@ -101,7 +101,7 @@ class AuthController extends StateNotifier<AsyncValue<AppUser?>> {
     final verified = res['verified'] == true;
     if (!verified) throw Exception('Invalid code');
     final tokens =
-        (res['tokens'] as Map<String, dynamic>) ?? const {};
+        (res['tokens'] as Map<String, dynamic>);
     await _tokens.write(
       access: tokens['access_token'] as String,
       refresh: tokens['refresh_token'] as String,

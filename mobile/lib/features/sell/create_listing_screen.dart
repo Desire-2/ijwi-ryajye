@@ -65,6 +65,15 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     _bootstrap();
   }
 
+  @override
+  void dispose() {
+    _title.dispose();
+    _qty.dispose();
+    _price.dispose();
+    _region.dispose();
+    super.dispose();
+  }
+
   Future<void> _bootstrap() async {
     final api = ref.read(apiClientProvider);
     try {
@@ -127,7 +136,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         'negotiable': _negotiable,
         'location_region':
             _region.text.trim().isNotEmpty ? _region.text.trim() : null,
-        if (farmId != null) 'farm_id': farmId,
+        'farm_id': farmId,
       }..removeWhere((k, v) => v == null);
 
       await api.postJson('/listings', payload);
@@ -335,13 +344,13 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         maxLength: 90,
         decoration: const InputDecoration(
             labelText: 'Listing title (optional)',
-            hintText: 'e.g. Fresh harvest, Grade A'),
-        counterText: '',
+            hintText: 'e.g. Fresh harvest, Grade A',
+            counterText: ''),
       ),
       if (_farms != null && _farms!.isNotEmpty) ...[
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          initialValue: _farm?.id,
+          value: _farm?.id,
           decoration: const InputDecoration(labelText: 'Farm'),
           items: _farms!
               .map((f) => DropdownMenuItem(

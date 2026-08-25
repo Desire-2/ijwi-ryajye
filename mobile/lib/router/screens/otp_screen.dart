@@ -18,6 +18,12 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
   bool _busy = false;
   String? _error;
 
+  @override
+  void dispose() {
+    _code.dispose();
+    super.dispose();
+  }
+
   Future<void> _verify() async {
     setState(() {
       _busy = true;

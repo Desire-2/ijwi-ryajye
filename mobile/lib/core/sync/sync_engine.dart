@@ -108,7 +108,7 @@ class SyncEngine {
         // Backend reads cursors as "<collection>_cursor" query params.
         for (final e in cursors.entries) '${e.key}_cursor': e.value,
       });
-      final body = (res['collections'] as Map<String, dynamic>) ?? {};
+      final body = (res['collections'] as Map<String, dynamic>);
       final newCursors =
           (res['cursors'] as Map<String, dynamic>?) ?? const {};
       for (final entry in body.entries) {

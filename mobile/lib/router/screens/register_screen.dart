@@ -27,6 +27,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     'LOGISTICS': 'Logistics / Imicungu',
   };
 
+  @override
+  void dispose() {
+    _phone.dispose();
+    _name.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
   Future<void> _submit() async {
     setState(() {
       _busy = true;

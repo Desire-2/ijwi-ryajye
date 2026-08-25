@@ -1,6 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import 'core/i18n/i18n_provider.dart';
 import 'core/sync/sync_engine.dart';
@@ -9,7 +10,16 @@ import 'router/app_router.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const ProviderScope(child: IjwiApp()));
+  FlutterError.onError = (details) {
+    debugPrint('[FlutterError] ${details.exceptionAsString()}');
+    debugPrint(details.stack.toString());
+  };
+  runZonedGuarded(() {
+    runApp(const ProviderScope(child: IjwiApp()));
+  }, (error, stack) {
+    debugPrint('[ZoneError] $error');
+    debugPrint(stack.toString());
+  });
 }
 
 class IjwiApp extends ConsumerStatefulWidget {
@@ -27,8 +37,10 @@ class _IjwiAppState extends ConsumerState<IjwiApp> {
   }
 
   Future<void> _bootstrapSync() async {
-    // Warm the engine and start the periodic push/pull loop once the first
-    // frame is up (engine only syncs when a session exists).
+    // Delay sync engine init so it doesn't compete with splash rendering
+    // on low-RAM devices.
+    await Future<void>.delayed(const Duration(seconds: 4));
+    if (!mounted) return;
     try {
       final engine = await ref.read(syncEngineProvider.future);
       engine.startPeriodicSync();

@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/services.dart' show root;
+import 'package:flutter/services.dart' show rootBundle;
 
 import '../config.dart';
 
@@ -11,7 +11,6 @@ class Translations {
 
   final String _locale;
   final Map<String, String> _bundle;
-  Map<String, String>? _fallbackEn;
 
   static Future<Translations> load(String locale) async {
     final effective =
@@ -26,12 +25,6 @@ class Translations {
   }
 
   String get locale => _locale;
-
-  Future<void> _ensureFallback() async {
-    if (_fallbackEn != null || _locale == 'en') return;
-    final raw = await rootBundle.loadString('assets/lang/en.json');
-    _fallbackEn = _parse(raw);
-  }
 
   String t(String key) => _bundle[key] ?? key;
 }

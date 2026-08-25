@@ -18,6 +18,11 @@ def get_or_create_wallet(user_id, currency="RWF", cooperative_id=None):
 
 
 def _lock_wallet(wallet_id) -> Wallet:
+    if db.engine.dialect.name == "sqlite":
+        wallet = db.session.get(Wallet, wallet_id)
+        if wallet is None:
+            raise not_found("Wallet not found")
+        return wallet
     row = db.session.execute(
         text("SELECT id FROM wallets WHERE id = :id FOR UPDATE"), {"id": wallet_id}
     ).fetchone()

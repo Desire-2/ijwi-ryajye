@@ -57,7 +57,7 @@ class _HomeTabState extends ConsumerState<HomeTab> {
           .catchError((_) => 0),
       api.getJson('/wallet').then((r) {
         d.availableMinor = (r['available_minor'] as num?)?.toInt() ?? 0;
-      }).catchError((_) => 0),
+      }).catchError((_) {}),
       api
           .getJson('/market-prices')
           .then((r) =>
@@ -159,7 +159,7 @@ class _HomeTabState extends ConsumerState<HomeTab> {
 
           // ---- Market pulse strip ----
           SectionHeader(
-              title: 'Today\'s market',
+              'Today\'s market',
               actionLabel: tr('tab_market'),
               onAction: () => context.go('/market')),
           if (!_data.loaded)

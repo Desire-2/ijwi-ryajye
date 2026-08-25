@@ -1,33 +1,67 @@
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-/// Secure persistence for JWT pair + current user profile.
+/// Persistence for JWT pair + current user profile using SharedPreferences.
+///
+/// Replaced flutter_secure_storage to avoid native Keystore crashes on
+/// budget Samsung devices (SIGSEGV during JNI init).
 class TokenStore {
   static const _accessKey = 'ijwi.access';
   static const _refreshKey = 'ijwi.refresh';
   static const _userKey = 'ijwi.user';
 
-  final FlutterSecureStorage _storage = const FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
-  );
+  SharedPreferences? _prefs;
 
-  Future<String?> readAccess() => _storage.read(key: _accessKey);
-  Future<String?> readRefresh() => _storage.read(key: _refreshKey);
-
-  Future<void> write({required String access, required String refresh}) async {
-    await _storage.write(key: _accessKey, value: access);
-    await _storage.write(key: _refreshKey, value: refresh);
+  Future<SharedPreferences> get _safe async {
+    _prefs ??= await SharedPreferences.getInstance();
+    return _prefs!;
   }
 
-  Future<void> writeUserJson(String json) =>
-      _storage.write(key: _userKey, value: json);
+  Future<String?> readAccess() async {
+    try {
+      return (await _safe).getString(_accessKey);
+    } catch (_) {
+      return null;
+    }
+  }
 
-  Future<String?> readUserJson() => _storage.read(key: _userKey);
+  Future<String?> readRefresh() async {
+    try {
+      return (await _safe).getString(_refreshKey);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> write({required String access, required String refresh}) async {
+    try {
+      final prefs = await _safe;
+      await prefs.setString(_accessKey, access);
+      await prefs.setString(_refreshKey, refresh);
+    } catch (_) {}
+  }
+
+  Future<void> writeUserJson(String json) async {
+    try {
+      (await _safe).setString(_userKey, json);
+    } catch (_) {}
+  }
+
+  Future<String?> readUserJson() async {
+    try {
+      return (await _safe).getString(_userKey);
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<void> clear() async {
-    await _storage.delete(key: _accessKey);
-    await _storage.delete(key: _refreshKey);
-    await _storage.delete(key: _userKey);
+    try {
+      final prefs = await _safe;
+      await prefs.remove(_accessKey);
+      await prefs.remove(_refreshKey);
+      await prefs.remove(_userKey);
+    } catch (_) {}
   }
 }
 

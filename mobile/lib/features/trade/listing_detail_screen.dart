@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/i18n/i18n_provider.dart';
 import '../../core/network/api_client.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../core/theme/design_system.dart';
 import '../../core/utils/money.dart';
 
 class ListingDetail {
@@ -177,7 +178,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                             const SizedBox(height: 6),
                             Text(
                                 '${formatRwf(l.priceMinor)} / ${l.unit}',
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 22,
                                     fontWeight: FontWeight.w800,
                                     color: IjwiColors.green)),

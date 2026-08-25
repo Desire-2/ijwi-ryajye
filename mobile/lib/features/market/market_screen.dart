@@ -78,7 +78,7 @@ class _MarketScreenState extends ConsumerState<MarketScreen> {
         'per_page': '20',
         if (_search.isNotEmpty) 'product': _search,
       });
-      final next = (res['items'] as List)
+      final next = (res['items'] as List? ?? const [])
           .map((j) => ListingSummary.fromJson(j as Map<String, dynamic>))
           .toList();
       setState(() {
