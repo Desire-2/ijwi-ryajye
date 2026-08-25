@@ -1,3 +1,7 @@
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from app.app import create_wsgi_app
 
 application = create_wsgi_app()

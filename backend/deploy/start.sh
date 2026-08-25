@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
+if [ -f .env ]; then
+  set -a; source .env; set +a
+fi
+
 echo "Running database migrations..."
 flask --app wsgi:app db upgrade
 

@@ -17,7 +17,7 @@ class BaseConfig:
 
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "DATABASE_URL",
-        "sqlite:///dev.db",
+        "postgresql+psycopg2://ijwi:ijwi_dev@127.0.0.1:5432/ijwi_ryajye",
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
