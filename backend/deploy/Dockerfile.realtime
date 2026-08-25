@@ -7,11 +7,11 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential libpq-dev curl \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app/backend
-COPY backend/requirements.txt .
+WORKDIR /app
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt gunicorn==21.2.0 eventlet==0.36.1
 
-COPY backend/ .
+COPY . .
 
 # Socket.IO server: one eventlet worker only (sticky connections).
 EXPOSE 5001
