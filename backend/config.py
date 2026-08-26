@@ -107,5 +107,5 @@ CONFIG_BY_ENV = {
 
 
 def get_config(name=None):
-    env = os.environ.get("APP_ENV", "development").strip().lower()
-    return CONFIG_BY_ENV.get(env, DevelopmentConfig)
+    env = name or os.environ.get("APP_ENV", "development")
+    return CONFIG_BY_ENV.get(env.strip().lower(), DevelopmentConfig)

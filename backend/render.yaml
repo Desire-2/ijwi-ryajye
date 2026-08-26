@@ -3,8 +3,9 @@ services:
   - type: web
     name: ijwi-api
     env: docker
-    dockerfilePath: backend/deploy/Dockerfile.api
-    startCommand: ./backend/deploy/start.sh
+    buildContext: backend
+    dockerfilePath: deploy/Dockerfile.api
+    startCommand: ./deploy/start.sh
     envVars:
       - key: FLASK_ENV
         value: production
@@ -42,7 +43,8 @@ services:
   - type: web
     name: ijwi-realtime
     env: docker
-    dockerfilePath: backend/deploy/Dockerfile.realtime
+    buildContext: backend
+    dockerfilePath: deploy/Dockerfile.realtime
     envVars:
       - key: FLASK_ENV
         value: production
@@ -80,7 +82,8 @@ services:
   - type: worker
     name: ijwi-worker
     env: docker
-    dockerfilePath: backend/deploy/Dockerfile.api
+    buildContext: backend
+    dockerfilePath: deploy/Dockerfile.api
     startCommand: celery -A celery_app.celery worker -l info -c 4
     envVars:
       - key: FLASK_ENV
@@ -118,7 +121,8 @@ services:
   - type: cron
     name: ijwi-beat
     env: docker
-    dockerfilePath: backend/deploy/Dockerfile.api
+    buildContext: backend
+    dockerfilePath: deploy/Dockerfile.api
     startCommand: celery -A celery_app.celery beat -l info
     envVars:
       - key: FLASK_ENV
