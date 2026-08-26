@@ -28,6 +28,10 @@ def create_app(config_name=None):
 
     db.init_app(app)
     migrate.init_app(app, db, directory=os.path.join(os.path.dirname(__file__), "..", "migrations"))
+
+    with app.app_context():
+        db.create_all()
+
     bcrypt.init_app(app)
     jwt.init_app(app)
     cors.init_app(app, resources={r"/api/*": {"origins": app.config.get("CORS_ORIGINS", "*")}})
