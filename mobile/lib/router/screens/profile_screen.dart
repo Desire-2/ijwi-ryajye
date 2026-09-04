@@ -99,6 +99,17 @@ class ProfileScreen extends ConsumerWidget {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => context.push('/notifications'),
         ),
+        if (user?.primaryRole == 'ADMIN') ...[
+          _Section('Admin'),
+          ListTile(
+            leading: const Icon(Icons.storefront_outlined,
+                color: IjwiColors.greenDark),
+            title: const Text('Marketplace catalogue'),
+            subtitle: const Text('Add or edit categories, products and units'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/admin/catalog'),
+          ),
+        ],
         _Section('App'),
         ListTile(
           leading: const Icon(Icons.language),

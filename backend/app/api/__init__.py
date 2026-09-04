@@ -5,6 +5,7 @@ def register_api(app):
     from app.api import (
         account,
         admin,
+        catalog_admin,
         users as users_api,
         calls,
         commerce,
@@ -291,6 +292,14 @@ def register_api(app):
     add("/api/v1/admin/export-requests", view_func=admin.export_requests, methods=["GET"])
     add("/api/v1/admin/deletion-requests", view_func=admin.deletion_requests, methods=["GET"])
     add("/api/v1/admin/analytics/overview", view_func=admin.analytics_overview, methods=["GET"])
+
+    # ---- Admin catalogue management ----
+    add("/api/v1/admin/catalog/categories", view_func=catalog_admin.create_category, methods=["POST"])
+    add("/api/v1/admin/catalog/categories/<category_id>", view_func=catalog_admin.update_category, methods=["PATCH"])
+    add("/api/v1/admin/catalog/products", view_func=catalog_admin.create_product, methods=["POST"])
+    add("/api/v1/admin/catalog/products/<product_id>", view_func=catalog_admin.update_product, methods=["PATCH"])
+    add("/api/v1/admin/catalog/units", view_func=catalog_admin.create_unit, methods=["POST"])
+    add("/api/v1/admin/catalog/units/<unit_code>", view_func=catalog_admin.update_unit, methods=["PATCH"])
 
     # ---- Health ----
     add("/health", view_func=platform.health, methods=["GET"])

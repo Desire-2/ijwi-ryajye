@@ -272,6 +272,50 @@ class MarketplaceRepository {
     return (res['draft'] as Map<String, dynamic>?) ?? const {};
   }
 
+  // ---- admin catalogue management (ADMIN role only) ----
+
+  Future<Map<String, dynamic>> adminCreateCategory({
+    required String name,
+    String icon = '',
+    String description = '',
+  }) async {
+    return _api.postJson('/admin/catalog/categories', {
+      'name': name,
+      'icon': icon,
+      if (description.isNotEmpty) 'description': description,
+    });
+  }
+
+  Future<Map<String, dynamic>> adminUpdateCategory(
+          String categoryId, Map<String, dynamic> changes) =>
+      _api.patchJson('/admin/catalog/categories/$categoryId', changes);
+
+  Future<Map<String, dynamic>> adminCreateProduct({
+    required String name,
+    required String categoryId,
+    String defaultUnit = 'kg',
+    String emoji = '',
+  }) async {
+    return _api.postJson('/admin/catalog/products', {
+      'name': name,
+      'category_id': categoryId,
+      'default_unit': defaultUnit,
+      'emoji': emoji,
+    });
+  }
+
+  Future<Map<String, dynamic>> adminUpdateProduct(
+          String productId, Map<String, dynamic> changes) =>
+      _api.patchJson('/admin/catalog/products/$productId', changes);
+
+  Future<Map<String, dynamic>> adminCreateUnit(
+          {required String code, required String label}) =>
+      _api.postJson('/admin/catalog/units', {'code': code, 'label': label});
+
+  Future<Map<String, dynamic>> adminUpdateUnit(
+          String code, Map<String, dynamic> changes) =>
+      _api.patchJson('/admin/catalog/units/$code', changes);
+
   /// Attaches already-uploaded media to one of the seller's listings.
   Future<void> attachListingMedia(
       String listingId, List<Map<String, dynamic>> media) async {

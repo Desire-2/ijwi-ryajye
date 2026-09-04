@@ -347,8 +347,27 @@ Flask API (backend) / SQLite cache
   device mirror is dropped the moment the server owns the draft. Publishing while
   offline explains that a connection is required and keeps the draft safe.
 
+### Admin catalogue management (spec §12/§107 — catalogue stays backend-managed)
+- New admin-only API module (`backend/app/api/catalog_admin.py`, registered under
+  `/api/v1/admin/catalog`): create/edit categories (`POST|PATCH .../categories`),
+  products (`POST|PATCH .../products`), and units (`POST|PATCH .../units/{code}`).
+  Every handler requires the ADMIN role, validates names/slugs/category links,
+  returns 409 on name/slug conflicts and 404 for unknown targets, auto-slugs when
+  none is supplied, and audit-logs every mutation (`catalog.category.created`, …).
+  Because the Create Listing wizard renders categories/products/units dynamically,
+  a new category added here is usable in listings with no app release or code.
+- Flutter: `AdminCatalogScreen` (`/admin/catalog`) with Categories / Products / Units
+  tabs — each row opens an edit dialog and a FAB adds new entries; repository
+  methods (`adminCreateCategory`, …). The Profile screen shows the “Marketplace
+  catalogue” entry only when the signed-in user has the ADMIN role
+  (`primaryRole == 'ADMIN'` or an ADMIN role row).
+- Regression tests: `tests/integration/test_admin_catalog.py` — non-admins get 403,
+  admins create/edit categories/products/units end-to-end, conflicts 409, unknown
+  targets 404, and a freshly added category+product is immediately publishable as a
+  listing by a farmer.
+
 ## 7. Traceability of spec coverage
 
 - §5 API mapping → §4, §8–16 home/search/filters/cards, §17–21 seller/trust/quality, §23–24 availability/units, §28–29 checkout (offer→order), §30–35 negotiation/auctions, §36–40 RFQ/matching/opportunities, §50–52 favorites/saved searches/price alerts, §55–58 chat/orders/timeline, §61–63 payments/fees, §80–83 reviews/reputation/trust, §66/§128–130 seller dashboard/analytics/insights, §81–83 reviews/reputation/trust badges, §84–87 realtime events/notifications/inventory, §88–94 search performance/discovery/offline, §93–94 low-bandwidth/offline browsing, §97–101 listing forms, §136 deep links, §138–139 localization, §140–150 visual design/states, §152–157 pagination/caching/state, §160 backend authority, §170 API error mapping, §226–229 no fakes/duplicates, §231 cleanup.
 
-Listing-creation spec (one universal engine): §2–3 kinds/examples, §6 API contract audit, §7–10 universal attributes + entry points, §14–15 attribute engine + universal fields, §17–25 quantity/units/availability, §27–29 quality/cert, §34–39 media (upload/order/retry), §44–45 sale method/auction fields, §46–52 per-kind forms, §55–56 inventory link, §58–63 drafts/preview/publish, §59 offline drafts (device-local drafts + resume + publish-after-reconnect, see “Offline listing drafts” above), §66–67 share-after-publish (success screen → Status / community / chat / outside, see “Share after publish” above), §69–71 AI draft extraction (wizard ✨ assist sheet; review-before-publish, see “AI listing assistant” above), §83–86 form state/autosave/unsaved, §95–97 offline listing flow/sync (start offline from cached catalogue, media queued, no fake “Published”), §100–107 security/integrity/media storage/attribute storage, §115–118 success screen/create-another, §120–122 matching after publish (backend matching exists; surfaced via opportunities screen), §123–125 community/status/direct-buyer sharing (success-screen share sheet), §128 abandonment reminder (draft continuation available from My Listings), §130–134 validation/help/units/location/dates, §135–141 icons/labels/sticky bar/keyboard/image UX, §143–146 backend authority + idempotency, §153 offline data cache (catalogue + drafts cached; server stays authoritative for finance), §157–172 tests/docs (draft lifecycle, invalid data, ownership, media retry, publish-without-network).
+Listing-creation spec (one universal engine): §2–3 kinds/examples, §6 API contract audit, §7–10 universal attributes + entry points, §14–15 attribute engine + universal fields, §17–25 quantity/units/availability, §27–29 quality/cert, §34–39 media (upload/order/retry), §44–45 sale method/auction fields, §46–52 per-kind forms, §55–56 inventory link, §58–63 drafts/preview/publish, §59 offline drafts (device-local drafts + resume + publish-after-reconnect, see “Offline listing drafts” above), §66–67 share-after-publish (success screen → Status / community / chat / outside, see “Share after publish” above), §69–71 AI draft extraction (wizard ✨ assist sheet; review-before-publish, see “AI listing assistant” above), §83–86 form state/autosave/unsaved, §95–97 offline listing flow/sync (start offline from cached catalogue, media queued, no fake “Published”), §100–107 security/integrity/media storage/attribute storage, §115–118 success screen/create-another, §120–122 matching after publish (backend matching exists; surfaced via opportunities screen), §123–125 community/status/direct-buyer sharing (success-screen share sheet), §128 abandonment reminder (draft continuation available from My Listings), §130–134 validation/help/units/location/dates, §135–141 icons/labels/sticky bar/keyboard/image UX, §143–146 backend authority + idempotency, §153 offline data cache (catalogue + drafts cached; server stays authoritative for finance), §157–172 tests/docs (draft lifecycle, invalid data, ownership, media retry, publish-without-network), §12/§107 backend-managed catalogue (admin screen + admin API keeps categories/products/units dynamic, no code changes per category).

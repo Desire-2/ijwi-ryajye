@@ -22,6 +22,7 @@ import '../../features/market/market_screen.dart';
 import '../../features/market/search_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
+import '../../features/admin/admin_catalog_screen.dart';
 import '../../features/sell/create_listing_screen.dart';
 import '../../features/sell/listing_edit_screen.dart';
 import '../../features/sell/my_listings_screen.dart';
@@ -135,6 +136,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
           path: '/sell/dashboard',
           builder: (_, __) => const SellerDashboardScreen()),
+      GoRoute(
+          path: '/admin/catalog',
+          builder: (_, __) => const AdminCatalogScreen()),
       GoRoute(
           path: '/intelligence',
           builder: (context, state) => IntelligenceHubScreen(
