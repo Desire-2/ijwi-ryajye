@@ -11,6 +11,7 @@ import '../../core/theme/design_system.dart';
 import '../../core/utils/money.dart';
 import '../market/marketplace_models.dart';
 import '../market/marketplace_repository.dart';
+import 'listing_share_sheet.dart';
 import 'listing_wizard_engine.dart';
 
 /// A photo the seller picked for this listing. Uploads happen right after
@@ -1507,6 +1508,12 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             onPressed: () {
               context.push('/listing/${l.id}');
             },
+          ),
+          const SizedBox(height: 10),
+          FilledButton.tonalIcon(
+            icon: const Icon(Icons.share_outlined),
+            label: const Text('Share your listing'),
+            onPressed: () => showListingShareSheet(context, l),
           ),
           const SizedBox(height: 10),
           OutlinedButton.icon(

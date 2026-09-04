@@ -318,8 +318,20 @@ Flask API (backend) / SQLite cache
   under the seller card (hidden when none); farmer profiles get a Reviews section from
   `/reputation/users/<id>` + `/users/<id>/reviews` (best-effort, never blocks the page).
 
+### Share after publish (spec §66–67/§123–125)
+- The Create Listing success screen now has a “Share your listing” action opening
+  `ListingShareSheet` — one sheet reusing the existing product surfaces (no duplicated
+  content model):
+  - **Status**: `POST /status/from-listing` → followers get a status with a View Product link.
+  - **Community**: post the listing to the public feed or one of the seller's joined
+    communities via the community post API with `listing_id` (`repo.publishListingPost`).
+  - **Chat**: pick one of your conversations → sends the same `listing_card` message
+    ChatScreen uses (`entity_ref_type: listing` + snapshot) into that conversation.
+  - **Copy text / Share outside**: shareable plain text plus the system share sheet
+    (WhatsApp, email…). Each action confirms with a snackbar and reports failures inline.
+
 ## 7. Traceability of spec coverage
 
 - §5 API mapping → §4, §8–16 home/search/filters/cards, §17–21 seller/trust/quality, §23–24 availability/units, §28–29 checkout (offer→order), §30–35 negotiation/auctions, §36–40 RFQ/matching/opportunities, §50–52 favorites/saved searches/price alerts, §55–58 chat/orders/timeline, §61–63 payments/fees, §80–83 reviews/reputation/trust, §66/§128–130 seller dashboard/analytics/insights, §81–83 reviews/reputation/trust badges, §84–87 realtime events/notifications/inventory, §88–94 search performance/discovery/offline, §93–94 low-bandwidth/offline browsing, §97–101 listing forms, §136 deep links, §138–139 localization, §140–150 visual design/states, §152–157 pagination/caching/state, §160 backend authority, §170 API error mapping, §226–229 no fakes/duplicates, §231 cleanup.
 
-Listing-creation spec (one universal engine): §2–3 kinds/examples, §6 API contract audit, §7–10 universal attributes + entry points, §14–15 attribute engine + universal fields, §17–25 quantity/units/availability, §27–29 quality/cert, §34–39 media (upload/order/retry), §44–45 sale method/auction fields, §46–52 per-kind forms, §55–56 inventory link, §58–63 drafts/preview/publish, §66–67 share (entry points exist; share-after-publish to chat/status is a follow-up), §83–86 form state/autosave/unsaved, §100–107 security/integrity/media storage/attribute storage, §115–118 success screen/create-another, §120–122 matching after publish (backend matching exists; surfaced via opportunities screen), §128 abandonment reminder (follow-up), §130–134 validation/help/units/location/dates, §135–141 icons/labels/sticky bar/keyboard/image UX, §143–146 backend authority + idempotency, §157–172 tests/docs (draft lifecycle, invalid data, ownership, media retry, publish-without-network).
+Listing-creation spec (one universal engine): §2–3 kinds/examples, §6 API contract audit, §7–10 universal attributes + entry points, §14–15 attribute engine + universal fields, §17–25 quantity/units/availability, §27–29 quality/cert, §34–39 media (upload/order/retry), §44–45 sale method/auction fields, §46–52 per-kind forms, §55–56 inventory link, §58–63 drafts/preview/publish, §66–67 share-after-publish (success screen → Status / community / chat / outside, see “Share after publish” above), §83–86 form state/autosave/unsaved, §100–107 security/integrity/media storage/attribute storage, §115–118 success screen/create-another, §120–122 matching after publish (backend matching exists; surfaced via opportunities screen), §123–125 community/status/direct-buyer sharing (success-screen share sheet), §128 abandonment reminder (follow-up), §130–134 validation/help/units/location/dates, §135–141 icons/labels/sticky bar/keyboard/image UX, §143–146 backend authority + idempotency, §157–172 tests/docs (draft lifecycle, invalid data, ownership, media retry, publish-without-network).

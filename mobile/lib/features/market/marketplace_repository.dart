@@ -187,6 +187,28 @@ class MarketplaceRepository {
     await _api.postJson('/listings/$listingId/media', {'media': media});
   }
 
+  /// Posts the listing to the user's Status (backend creates the status).
+  Future<void> statusFromListing(String listingId, {String caption = ''}) async {
+    await _api.postJson('/statuses/from-listing', {
+      'listing_id': listingId,
+      if (caption.isNotEmpty) 'caption': caption,
+    });
+  }
+
+  /// Publishes a post that references a listing (feed or a joined community).
+  Future<void> publishListingPost({
+    required String listingId,
+    required String body,
+    String? communityId,
+  }) async {
+    await _api.postJson('/posts', {
+      'post_type': 'text',
+      'body_text': body,
+      'listing_id': listingId,
+      if (communityId != null) 'community_id': communityId,
+    });
+  }
+
   /// Uploads a picked image to the platform and returns its storage key.
   /// Reports per-file progress so the wizard can show upload state per photo.
   Future<String> uploadListingImage(
