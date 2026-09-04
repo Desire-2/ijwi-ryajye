@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from sqlalchemy import text
 
-from extensions import db
+from extensions import db, realtime
 from app.errors import bad_request, conflict, not_found
 from app.models.base import utcnow
 from app.models.payment import Wallet, WalletLedgerEntry, Withdrawal
@@ -91,6 +91,15 @@ def post_entry(
     )
     db.session.add(entry)
     db.session.flush()
+    realtime.emit_to_user(user_id, "wallet.updated", {
+        "wallet_id": wallet.id,
+        "available_minor": new_available,
+        "pending_minor": new_pending,
+        "entry_type": entry_type,
+        "reason_code": reason_code,
+        "reference_type": reference_type,
+        "reference_id": str(reference_id),
+    })
     return entry
 
 

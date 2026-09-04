@@ -210,6 +210,78 @@ def user_reputation(user_id):
     return reputation_summary(target.id)
 
 
+@jwt_required()
+def user_reviews(user_id):
+    """Public review history for a user (subject of the review).
+
+    Used by farmer profiles and listing detail to show verified buyer/seller
+    feedback. Rows carry reviewer + order/listing context for readable cards.
+    """
+    from app.models.marketplace import Listing
+    from app.models.order import Order, Review
+
+    target = db.session.get(User, user_id)
+    if target is None:
+        raise not_found("User not found")
+
+    rows = (
+        Review.query.filter_by(subject_id=target.id)
+        .order_by(Review.created_at.desc())
+        .limit(50)
+        .all()
+    )
+
+    reviewers = {
+        u.id: {"id": u.id, "full_name": u.full_name, "username": u.username}
+        for u in User.query.filter(User.id.in_({r.reviewer_id for r in rows})).all()
+    }
+    orders = {
+        o.id: o
+        for o in Order.query.filter(Order.id.in_({r.order_id for r in rows})).all()
+    }
+    listings = {
+        l.id: l
+        for l in Listing.query.filter(
+            Listing.id.in_({o.listing_id for o in orders.values() if o.listing_id})
+        ).all()
+    }
+
+    def row_json(r):
+        order = orders.get(r.order_id)
+        listing = listings.get(order.listing_id) if order else None
+        return {
+            "id": r.id,
+            "subject_role": r.subject_role,
+            "overall_rating": r.overall_rating,
+            "communication_rating": r.communication_rating,
+            "accuracy_rating": r.accuracy_rating,
+            "reliability_rating": r.reliability_rating,
+            "payment_rating": r.payment_rating,
+            "delivery_rating": r.delivery_rating,
+            "comment": r.comment or "",
+            "verified_transaction": bool(r.verified_transaction),
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "reviewer": reviewers.get(r.reviewer_id),
+            "order": {
+                "id": order.id,
+                "order_number": order.order_number,
+                "quantity_value": float(order.quantity_value),
+                "unit_code": order.unit_code,
+            }
+            if order
+            else None,
+            "listing": {
+                "id": listing.id,
+                "title": listing.title,
+                "product": listing.product.name,
+            }
+            if listing
+            else None,
+        }
+
+    return {"reviews": [row_json(r) for r in rows], "count": len(rows)}
+
+
 class DisputeOpenSchema(ma.Schema):
     order_id = ma.fields.String(required=True)
     dispute_type = ma.fields.String(required=True)

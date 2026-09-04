@@ -64,6 +64,20 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
     _load();
   }
 
+  Future<void> _setState(MyListingRow l, String state) async {
+    try {
+      await ref
+          .read(apiClientProvider)
+          .patchJson('/listings/${l.id}', {'state': state});
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(ApiClient.errorMessage(e))));
+      }
+    }
+  }
+
   Future<void> _closeListing(MyListingRow l) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -98,7 +112,16 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
   Widget build(BuildContext context) {
     final tr = ref.watch(trProvider);
     return Scaffold(
-      appBar: AppBar(title: Text(tr('my_listings'))),
+      appBar: AppBar(
+        title: Text(tr('my_listings')),
+        actions: [
+          IconButton(
+            tooltip: 'Seller dashboard',
+            icon: const Icon(Icons.insights_outlined),
+            onPressed: () => context.push('/sell/dashboard'),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: IjwiColors.green,
         foregroundColor: Colors.white,
@@ -158,8 +181,16 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
                           trailing: PopupMenuButton<String>(
                             onSelected: (v) {
                               if (v == 'close') _closeListing(l);
+                              if (v == 'pause') _setState(l, 'PAUSED');
+                              if (v == 'activate') _setState(l, 'ACTIVE');
                             },
                             itemBuilder: (context) => [
+                              if (l.state == 'ACTIVE')
+                                const PopupMenuItem(
+                                    value: 'pause', child: Text('Pause listing')),
+                              if (l.state == 'PAUSED')
+                                const PopupMenuItem(
+                                    value: 'activate', child: Text('Activate listing')),
                               const PopupMenuItem(
                                   value: 'close', child: Text('Close listing')),
                             ],

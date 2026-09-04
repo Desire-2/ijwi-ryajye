@@ -86,7 +86,12 @@ def reserve(
 
     remaining = qty
     reservations = []
-    for inv in candidates.order_by(Inventory.created_at.asc()):
+    # Lock candidate rows (in id order to avoid deadlocks) so two concurrent
+    # reservations can never both read the same availability and oversell.
+    query = candidates.order_by(Inventory.id)
+    if db.engine.dialect.name != "sqlite":
+        query = query.with_for_update()
+    for inv in query.all():
         avail = available_quantity(inv)
         if avail <= 0:
             continue

@@ -56,12 +56,22 @@ class SocketService {
     // Generic fan-out: backend emits named events; we mirror them locally.
     for (final event in [
       'notification',
+      'notification.created',
       'message.new',
       'message.read',
       'typing',
       'conversation.updated',
+      // Marketplace events
+      'listing.created',
+      'offer.created',
       'offer.updated',
+      'offer.accepted',
+      'order.created',
       'order.updated',
+      'delivery.updated',
+      'bid.placed',
+      'bid.accepted',
+      'market.price_updated',
       'wallet.updated',
       'price.alert',
       'emergency.alert',

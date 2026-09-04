@@ -33,6 +33,7 @@ def farmer_card(user, profile=None):
         "main_crops": [c for c in (profile.main_crops or "").split(",") if c] if profile else [],
         "years_experience": profile.years_experience if profile else 0,
         "rating_avg": float(profile.rating_avg or 0) if profile else 0,
+        "rating_count": profile.rating_count if profile else 0,
         "completed_transactions": profile.completed_transactions if profile else 0,
         "reputation_tier": profile.reputation_tier if profile else "NEW_MEMBER",
     }

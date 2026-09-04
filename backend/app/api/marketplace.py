@@ -124,6 +124,25 @@ def list_listings():
             return {"items": [], "pagination": {"page": page, "per_page": per_page, "total": 0}}
         q = q.filter(Listing.product_id == prod.id)
 
+    category = args.get("category")
+    if category:
+        cat = ProductCategory.query.filter_by(slug=category).first()
+        if cat is None:
+            return {"items": [], "pagination": {"page": page, "per_page": per_page, "total": 0}}
+        q = q.filter(Listing.product_id.in_(
+            db.session.query(Product.id).filter(Product.category_id == cat.id)
+        ))
+
+    if args.get("negotiable") in ("true", "1"):
+        q = q.filter(Listing.negotiable.is_(True))
+    if args.get("verified") in ("true", "1"):
+        from app.models.identity import FarmerProfile
+
+        q = q.filter(Listing.seller_id.in_(
+            db.session.query(FarmerProfile.user_id).filter(
+                FarmerProfile.completed_transactions > 0)
+        ))
+
     for field in ("region", "quality_grade", "listing_type"):
         if args.get(field):
             col = getattr(Listing, f"location_{field}" if field == "region" else field)
@@ -140,6 +159,15 @@ def list_listings():
         q = q.order_by(Listing.price_minor.asc().nullslast())
     elif sort == "price_desc":
         q = q.order_by(Listing.price_minor.desc().nullslast())
+    elif sort == "quantity_desc":
+        q = q.order_by(Listing.available_quantity.desc())
+    elif sort == "rated":
+        from app.models.identity import FarmerProfile
+
+        q = (q.outerjoin(FarmerProfile, FarmerProfile.user_id == Listing.seller_id)
+             .order_by(FarmerProfile.rating_avg.desc().nullslast(), Listing.created_at.desc()))
+    elif sort == "ending_soon":
+        q = q.order_by(Listing.auction_end_at.asc().nullslast(), Listing.created_at.desc())
     else:
         q = q.order_by(Listing.created_at.desc())
 
@@ -220,14 +248,17 @@ def request_matches(request_id):
 @jwt_required()
 def listing_price_advisor(listing_id=None):
     user = get_current_user()
+    # Advisory call: read query params (mobile GET) with JSON body fallback.
+    args = request.args
     body = request.get_json(silent=True) or {}
-    product_id = body.get("product_id")
-    region = body.get("region") or user.region
-    price_minor = int(body.get("price_minor", 0))
-    if not product_id or not region:
-        raise bad_request("product_id and region are required")
+    product_id = args.get("product_id") or body.get("product_id")
+    region = args.get("region") or body.get("region") or user.region
+    price_minor = int(args.get("price_minor") or body.get("price_minor") or 0)
+    if not product_id:
+        raise bad_request("product_id is required")
     advice = price_advisor(product_id, region, price_minor,
-                           body.get("unit_code", "kg"), body.get("currency_code", "RWF"))
+                           args.get("unit_code") or body.get("unit_code") or "kg",
+                           args.get("currency_code") or body.get("currency_code") or "RWF")
     return {"advisor": advice}
 
 

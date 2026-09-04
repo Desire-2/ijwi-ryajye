@@ -8,6 +8,7 @@ def register_api(app):
         users as users_api,
         calls,
         commerce,
+        dashboard,
         farms,
         groups,
         intelligence,
@@ -38,7 +39,7 @@ def register_api(app):
     add("/api/v1/users/me", view_func=users_api.patch_me, methods=["PATCH"])
     add("/api/v1/users/me/export", view_func=users_api.export_my_data, methods=["GET"])
     add("/api/v1/users/me/deletion-request", view_func=users_api.request_account_deletion, methods=["POST"])
-    add("/api/v1/users/<user_id>", view_func=users_api.get_farmer, methods=["GET"])
+    add("/api/v1/users/<farmer_id>", view_func=users_api.get_farmer, methods=["GET"])
 
     # ---- Farms ----
     add("/api/v1/farms", view_func=farms.create_farm, methods=["POST"])
@@ -64,6 +65,7 @@ def register_api(app):
     add("/api/v1/listings/<listing_id>", view_func=marketplace.patch_listing, methods=["PATCH"])
     add("/api/v1/listings/<listing_id>/close", view_func=marketplace.close_listing, methods=["POST"])
     add("/api/v1/listings/<listing_id>/price-advice", view_func=marketplace.listing_price_advisor, methods=["GET"])
+    add("/api/v1/price-advice", view_func=marketplace.listing_price_advisor, methods=["GET"])
     add("/api/v1/buyer-requests", view_func=marketplace.create_buyer_request, methods=["POST"])
     add("/api/v1/buyer-requests", view_func=marketplace.list_buyer_requests, methods=["GET"])
     add("/api/v1/buyer-requests/<request_id>/matches", view_func=opportunities.buyer_request_matches, methods=["GET"])
@@ -247,6 +249,7 @@ def register_api(app):
     add("/api/v1/orders/<order_id>/reviews", view_func=account.order_reviews, methods=["GET"])
     add("/api/v1/reputation/me", view_func=account.reputation_summary, methods=["GET"])
     add("/api/v1/reputation/users/<user_id>", view_func=account.user_reputation, methods=["GET"])
+    add("/api/v1/users/<user_id>/reviews", view_func=account.user_reviews, methods=["GET"])
     add("/api/v1/disputes", view_func=account.open_dispute, methods=["POST"])
     add("/api/v1/disputes", view_func=account.my_disputes, methods=["GET"])
     add("/api/v1/disputes/<dispute_id>/evidence", view_func=account.add_dispute_evidence, methods=["POST"])
@@ -262,6 +265,9 @@ def register_api(app):
     add("/api/v1/sync/push", view_func=platform.sync_push, methods=["POST"])
     add("/api/v1/sync/pull", view_func=platform.sync_pull, methods=["GET"])
     add("/api/v1/uploads/<category>", view_func=platform.upload_file, methods=["POST"])
+
+    # ---- Seller dashboard ----
+    add("/api/v1/seller/dashboard", view_func=dashboard.seller_dashboard, methods=["GET"])
 
     # ---- Admin ----
     add("/api/v1/admin/users", view_func=admin.list_users, methods=["GET"])

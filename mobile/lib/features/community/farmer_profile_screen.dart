@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/network/api_client.dart';
 import '../../core/theme/design_system.dart';
+import '../../features/market/marketplace_models.dart';
+import '../../features/market/marketplace_repository.dart';
+import '../../features/market/review_widgets.dart';
 import '../../shared/widgets/ui.dart';
 import 'community_models.dart';
 import 'community_service.dart';
@@ -24,6 +29,8 @@ class FarmerProfileScreen extends ConsumerStatefulWidget {
 class _FarmerProfileScreenState extends ConsumerState<FarmerProfileScreen> {
   FarmerIdentity? _identity;
   List<Post>? _posts;
+  ReputationSummary? _reputation;
+  List<UserReview> _reviews = const [];
   String? _error;
 
   @override
@@ -48,9 +55,26 @@ class _FarmerProfileScreenState extends ConsumerState<FarmerProfileScreen> {
         _posts = posts;
         _error = null;
       });
+      unawaited(_loadReviews());
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = ApiClient.errorMessage(e));
+    }
+  }
+
+  /// Best-effort: reviews/reputation never block the profile itself.
+  Future<void> _loadReviews() async {
+    final repo = ref.read(marketplaceRepositoryProvider);
+    try {
+      final rep = await repo.reputationSummary(widget.userId);
+      final reviews = await repo.userReviews(widget.userId);
+      if (!mounted) return;
+      setState(() {
+        _reputation = rep;
+        _reviews = reviews.take(10).toList();
+      });
+    } catch (_) {
+      // profile still renders without the reviews block
     }
   }
 
@@ -68,7 +92,8 @@ class _FarmerProfileScreenState extends ConsumerState<FarmerProfileScreen> {
                   children: [
                     _profileCard(context, u),
                     _actions(context, u),
-                    SectionHeader('Posts'),
+                    _reviewsSection(),
+                    const SectionHeader('Posts'),
                     if (_posts == null)
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 16),
@@ -87,6 +112,29 @@ class _FarmerProfileScreenState extends ConsumerState<FarmerProfileScreen> {
                         PostCard(post: p, onChanged: (_) {}),
                   ],
                 ),
+    );
+  }
+
+  /// Reviews received from completed transactions (real reputation data).
+  Widget _reviewsSection() {
+    final rep = _reputation;
+    if (rep == null) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader('Reviews'),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: ReputationHeader(rep),
+        ),
+        const SizedBox(height: 10),
+        for (final r in _reviews)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: ReviewCard(r),
+          ),
+        const SizedBox(height: 8),
+      ],
     );
   }
 

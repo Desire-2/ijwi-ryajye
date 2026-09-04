@@ -119,6 +119,28 @@ class ApiClient {
     }
     return 'Unexpected error';
   }
+
+  /// True when the failure means no connectivity (rather than a server
+  /// response), so screens can fall back to locally cached data.
+  static bool isOfflineError(Object error) {
+    if (error is DioException) {
+      switch (error.type) {
+        case DioExceptionType.connectionError:
+        case DioExceptionType.connectionTimeout:
+        case DioExceptionType.sendTimeout:
+        case DioExceptionType.receiveTimeout:
+          return true;
+        case DioExceptionType.unknown:
+          final inner = error.error?.toString() ?? '';
+          return inner.contains('SocketException') ||
+              inner.contains('Failed host lookup') ||
+              inner.contains('Connection refused');
+        default:
+          return false;
+      }
+    }
+    return error.toString().contains('SocketException');
+  }
 }
 
 final apiClientProvider = Provider<ApiClient>((ref) {

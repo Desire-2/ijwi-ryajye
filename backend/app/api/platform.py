@@ -32,8 +32,8 @@ def global_search():
         from app.models.identity import FarmerProfile
 
         rows = (User.query.join(FarmerProfile, FarmerProfile.user_id == User.id)
-                .filter(User.full_name.ilike(f"%{q}%"), User.deleted_at.is_(None),
-                        FarmerProfile.is_searchable.is_(True)).limit(15).all())
+                .filter(User.full_name.ilike(f"%{q}%"), User.deleted_at.is_(None))
+                .order_by(User.created_at.desc()).limit(15).all())
         results["farmers"] = [{"id": u.id, "full_name": u.full_name} for u in rows]
     if scope in ("all", "groups"):
         from app.models.group import Group
@@ -44,31 +44,44 @@ def global_search():
     return results
 
 
+FAVORITE_SUBJECT_TYPES = ("listing", "farmer", "buyer_request")
+
+
 @jwt_required()
 def add_favorite():
     user = get_current_user()
     data = parse_body(type("S", (ma.Schema,), {
-        "listing_id": ma.fields.String(required=True)})())
-    listing = db.session.get(Listing, data["listing_id"])
-    if listing is None:
-        raise not_found("Listing not found")
-    existing = Favorite.query.filter_by(user_id=user.id, listing_id=listing.id).first()
+        "listing_id": ma.fields.String(required=True),
+        "subject_type": ma.fields.String(missing="listing"),
+        "subject_id": ma.fields.String()})())
+    subject_type = data["subject_type"]
+    if subject_type not in FAVORITE_SUBJECT_TYPES:
+        raise bad_request("subject_type must be one of " + ",".join(FAVORITE_SUBJECT_TYPES))
+    # Backwards compatible: favourites keyed by subject; when only listing_id is
+    # sent we store it as a listing favourite.
+    subject_id = data.get("subject_id") or data["listing_id"]
+    if subject_type == "listing":
+        listing = db.session.get(Listing, subject_id)
+        if listing is None or listing.deleted_at is not None:
+            raise not_found("Listing not found")
+    existing = Favorite.query.filter_by(
+        user_id=user.id, subject_type=subject_type, subject_id=subject_id).first()
     if existing is None:
-        db.session.add(Favorite(user_id=user.id, listing_id=listing.id))
-        listing.favorite_count = (listing.favorite_count or 0) + 1
+        db.session.add(Favorite(user_id=user.id, subject_type=subject_type, subject_id=subject_id))
         db.session.commit()
-    return {"favorited": True}
+    return {"favorited": True, "subject_type": subject_type, "subject_id": subject_id}
 
 
 @jwt_required()
 def remove_favorite(listing_id):
     user = get_current_user()
-    fav = Favorite.query.filter_by(user_id=user.id, listing_id=listing_id).first()
+    fav = Favorite.query.filter_by(user_id=user.id, subject_type="listing", subject_id=listing_id).first()
     if fav is not None:
         db.session.delete(fav)
-        listing = db.session.get(Listing, listing_id)
-        if listing and listing.favorite_count:
-            listing.favorite_count -= 1
+        db.session.commit()
+    # Also drop any other subject favourites pointing at the same id.
+    for other in Favorite.query.filter_by(user_id=user.id, subject_id=listing_id).all():
+        db.session.delete(other)
         db.session.commit()
     return {"favorited": False}
 
@@ -76,37 +89,56 @@ def remove_favorite(listing_id):
 @jwt_required()
 def list_favorites():
     user = get_current_user()
-    favs = Favorite.query.filter_by(user_id=user.id).order_by(Favorite.created_at.desc()).limit(100).all()
+    favs = Favorite.query.filter_by(user_id=user.id, subject_type="listing").order_by(
+        Favorite.created_at.desc()).limit(100).all()
     out = []
     for f in favs:
-        l = db.session.get(Listing, f.listing_id)
-        if l is not None and l.state == "ACTIVE":
-            out.append(listing_json(l))
+        l = db.session.get(Listing, f.subject_id)
+        if l is not None and l.deleted_at is None and l.state == "ACTIVE":
+            seller = db.session.get(User, l.seller_id)
+            out.append(listing_json(l, seller))
     return {"favorites": out}
 
 
 class SavedSearchSchema(ma.Schema):
     name = ma.fields.String(missing="")
+    label = ma.fields.String(missing="")
     query_json = ma.fields.Dict(required=True)
+    notify = ma.fields.Boolean(missing=True)
 
 
 @jwt_required()
 def create_saved_search():
+    import json
+
     user = get_current_user()
     data = parse_body(SavedSearchSchema)
-    ss = SavedSearch(user_id=user.id, name=data.get("name") or "Search",
-                     query_json=data["query_json"], notify_push=True)
+    label = data.get("name") or data.get("label") or "Search"
+    notify = bool(data.get("notify", True))
+    ss = SavedSearch(user_id=user.id, label=label,
+                     query_json=json.dumps(data["query_json"]),
+                     notify_on_new_matches=notify)
     db.session.add(ss)
     db.session.commit()
-    return {"saved_search": {"id": ss.id, "name": ss.name}}, 201
+    return {"saved_search": {"id": ss.id, "label": ss.label, "notify": ss.notify_on_new_matches}}, 201
 
 
 @jwt_required()
 def list_saved_searches():
+    import json
+
     user = get_current_user()
     rows = SavedSearch.query.filter_by(user_id=user.id).all()
-    return {"saved_searches": [{"id": s.id, "name": s.name, "query": s.query_json,
-                                "notify_push": s.notify_push} for s in rows]}
+    out = []
+    for s in rows:
+        try:
+            query = json.loads(s.query_json) if s.query_json else {}
+        except (ValueError, TypeError):
+            query = {}
+        out.append({"id": s.id, "label": s.label, "query": query,
+                    "notify": s.notify_on_new_matches,
+                    "created_at": s.created_at.isoformat()})
+    return {"saved_searches": out}
 
 
 @jwt_required()

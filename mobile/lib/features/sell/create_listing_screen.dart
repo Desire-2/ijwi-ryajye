@@ -53,6 +53,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   _FarmOption? _farm;
   String _listingType = 'FIXED_PRICE';
   bool _negotiable = true;
+  String _quality = 'UNGRADED';
+  String _delivery = 'PICKUP,NEGOTIABLE';
+  String? _priceAdvice;
   int _step = 0;
   bool _publishing = false;
   String? _error;
@@ -82,6 +85,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           .map((j) => _ProductOption.fromJson(j as Map<String, dynamic>))
           .toList());
     } catch (_) {}
+    _fetchPriceAdvice();
     try {
       final fRes = await api.getJson('/farms');
       setState(() => _farms = (fRes['farms'] as List? ?? const [])
@@ -102,6 +106,28 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       default:
         return true;
     }
+  }
+
+  Future<void> _fetchPriceAdvice() async {
+    if (_product == null || _price.text.trim().isEmpty) return;
+    try {
+      final res = await ref.read(apiClientProvider).getJson(
+          '/price-advice',
+          query: {
+            'product_id': _product!.id,
+            'price_minor': _price.text.trim(),
+            'unit_code': 'kg',
+          });
+      final advice = res['advisor'] as Map<String, dynamic>?;
+      final range = advice?['observed_range_minor'];
+      if (range is List && range.length == 2) {
+        final low = (range[0] as num).toInt();
+        final high = (range[1] as num).toInt();
+        setState(() => _priceAdvice =
+            'Recent market range: ${(low / 100).toStringAsFixed(0)}–${(high / 100).toStringAsFixed(0)} RWF/kg'
+            '${advice?['suggestion'] != null ? ' · ${advice!['suggestion']}' : ''}');
+      }
+    } catch (_) {}
   }
 
   Future<void> _publish() async {
@@ -130,13 +156,20 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             ? _title.text.trim()
             : '${_product!.name} — ${_qty.text.trim()}${_unitLabel()}',
         'quantity_value': double.tryParse(_qty.text.trim()) ?? 0,
+        'available_quantity': double.tryParse(_qty.text.trim()) ?? 0,
         'unit_code': 'kg',
         'price_minor': int.tryParse(_price.text.trim()) ?? 0,
         'listing_type': _listingType,
         'negotiable': _negotiable,
+        'quality_grade': _quality,
+        'delivery_options': _delivery,
         'location_region':
             _region.text.trim().isNotEmpty ? _region.text.trim() : null,
         'farm_id': farmId,
+        if (_listingType == 'AUCTION')
+          'auction_end_at': DateTime.now()
+              .add(const Duration(days: 7))
+              .toIso8601String(),
       }..removeWhere((k, v) => v == null);
 
       await api.postJson('/listings', payload);
@@ -324,6 +357,18 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         activeColor: IjwiColors.green,
         onChanged: (v) => setState(() => _negotiable = v),
       ),
+      if (_priceAdvice != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+                color: const Color(0xFFE8EEFB),
+                borderRadius: BorderRadius.circular(IjwiRadius.sm)),
+            child: Text(_priceAdvice!,
+                style: const TextStyle(fontSize: 12.5, color: IjwiColors.blue)),
+          ),
+        ),
     ]);
   }
 
@@ -347,8 +392,34 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             hintText: 'e.g. Fresh harvest, Grade A',
             counterText: ''),
       ),
+      const SizedBox(height: 8),
+      DropdownButtonFormField<String>(
+        value: _quality,
+        decoration: const InputDecoration(labelText: 'Quality grade'),
+        items: const [
+          DropdownMenuItem(value: 'UNGRADED', child: Text('Any / ungraded')),
+          DropdownMenuItem(value: 'STANDARD', child: Text('Standard')),
+          DropdownMenuItem(value: 'GRADE_B', child: Text('Grade B')),
+          DropdownMenuItem(value: 'GRADE_A', child: Text('Grade A')),
+          DropdownMenuItem(value: 'PREMIUM', child: Text('Premium')),
+        ],
+        onChanged: (v) => setState(() => _quality = v ?? 'UNGRADED'),
+      ),
+      const SizedBox(height: 10),
+      DropdownButtonFormField<String>(
+        value: _delivery,
+        decoration: const InputDecoration(labelText: 'Delivery options'),
+        items: const [
+          DropdownMenuItem(
+              value: 'PICKUP,NEGOTIABLE', child: Text('Pickup or negotiable')),
+          DropdownMenuItem(value: 'PICKUP', child: Text('Buyer pickup only')),
+          DropdownMenuItem(
+              value: 'SELLER_DELIVERY', child: Text('Seller can deliver')),
+        ],
+        onChanged: (v) => setState(() => _delivery = v ?? 'PICKUP,NEGOTIABLE'),
+      ),
       if (_farms != null && _farms!.isNotEmpty) ...[
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         DropdownButtonFormField<String>(
           value: _farm?.id,
           decoration: const InputDecoration(labelText: 'Farm'),
@@ -390,6 +461,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             _row('Price',
                 '${_price.text.trim()} minor/kg (${((int.tryParse(_price.text.trim()) ?? 0) / 100).toStringAsFixed(0)} RWF)'),
             _row('Type', _listingType == 'AUCTION' ? 'Auction' : 'Fixed price'),
+            _row('Quality', _quality.replaceAll('_', ' ')),
+            _row('Delivery', _delivery.replaceAll('_', ' ')),
             _row('Negotiable', _negotiable ? 'Yes' : 'No'),
             if (_region.text.trim().isNotEmpty)
               _row('Location', _region.text.trim()),

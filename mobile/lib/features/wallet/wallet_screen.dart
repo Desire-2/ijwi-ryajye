@@ -5,6 +5,7 @@ import '../../core/i18n/i18n_provider.dart';
 import '../../core/network/api_client.dart';
 import '../../core/theme/design_system.dart';
 import '../../core/utils/money.dart';
+import '../market/market_realtime.dart';
 
 class WalletScreen extends ConsumerStatefulWidget {
   const WalletScreen({super.key});
@@ -13,7 +14,8 @@ class WalletScreen extends ConsumerStatefulWidget {
   ConsumerState<WalletScreen> createState() => _WalletScreenState();
 }
 
-class _WalletScreenState extends ConsumerState<WalletScreen> {
+class _WalletScreenState extends ConsumerState<WalletScreen>
+    with MarketRealtime {
   Map<String, dynamic>? _wallet;
   List<Map<String, dynamic>>? _entries;
   String? _error;
@@ -39,12 +41,24 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
   void initState() {
     super.initState();
     _load();
+    // Payment confirmations and payouts update the wallet balance live.
+    attachMarketRealtime({
+      'wallet.updated': (_) => _load(),
+    });
+  }
+
+  @override
+  void dispose() {
+    detachMarketRealtime();
+    super.dispose();
   }
 
   Future<void> _withdraw() async {
     final amountCtl = TextEditingController();
+    final detailCtl = TextEditingController();
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
+      isScrollControlled: true,
       builder: (context) => Padding(
         padding: EdgeInsets.only(
             bottom: MediaQuery.of(context).viewInsets.bottom + 20,
@@ -55,6 +69,14 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
             keyboardType: TextInputType.number,
             decoration:
                 const InputDecoration(labelText: 'Amount (RWF, whole)'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: detailCtl,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(
+                labelText: 'Mobile money number',
+                hintText: '+2507…'),
           ),
           const SizedBox(height: 16),
           FilledButton(
@@ -68,7 +90,8 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       await ref.read(apiClientProvider).postJson('/wallet/withdrawals', {
         'amount_minor':
             ((double.tryParse(amountCtl.text.trim()) ?? 0) * 100).round(),
-        'destination': 'mobile_money',
+        'method': 'mobile_money',
+        'destination_detail': detailCtl.text.trim(),
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(

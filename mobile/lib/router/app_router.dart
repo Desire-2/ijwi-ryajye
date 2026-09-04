@@ -16,14 +16,19 @@ import '../../features/community/group_detail_screen.dart';
 import '../../features/community/farmer_profile_screen.dart';
 import '../../features/community/post_detail_screen.dart';
 import '../../features/intelligence/intelligence_hub.dart';
+import '../../features/market/buyer_requests_screen.dart';
+import '../../features/market/favorites_screen.dart';
 import '../../features/market/market_screen.dart';
+import '../../features/market/search_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/sell/create_listing_screen.dart';
 import '../../features/sell/my_listings_screen.dart';
+import '../../features/sell/seller_dashboard_screen.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/trade/listing_detail_screen.dart';
 import '../../features/trade/offers_screen.dart';
+import '../../features/trade/order_detail_screen.dart';
 import '../../features/trade/orders_screen.dart';
 import '../../features/wallet/wallet_screen.dart';
 import '../features/auth/auth_controller.dart';
@@ -99,14 +104,31 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
           path: '/listing/:id',
           builder: (context, state) =>
-              ListingDetailScreen(listingId: state.pathParameters['id']!)),
-      GoRoute(path: '/offers', builder: (_, __) => const OffersScreen()),
+              ListingDetailScreen(listingId: state.pathParameters['id']!)),      GoRoute(
+          path: '/offers', builder: (_, __) => const OffersScreen()),
       GoRoute(path: '/orders', builder: (_, __) => const OrdersScreen()),
+      GoRoute(
+          path: '/orders/:id',
+          builder: (context, state) => OrderDetailScreen(
+              orderId: state.pathParameters['id']!)),
       GoRoute(path: '/wallet', builder: (_, __) => const WalletScreen()),
+      // ---- Marketplace sub-routes ----
+      GoRoute(
+          path: '/market/search',
+          builder: (_, __) => const SearchScreen()),
+      GoRoute(
+          path: '/market/requests',
+          builder: (_, __) => const BuyerRequestsScreen()),
+      GoRoute(
+          path: '/market/favorites',
+          builder: (_, __) => const FavoritesScreen()),
       GoRoute(path: '/sell', builder: (_, __) => const MyListingsScreen()),
       GoRoute(
           path: '/sell/new',
           builder: (_, __) => const CreateListingScreen()),
+      GoRoute(
+          path: '/sell/dashboard',
+          builder: (_, __) => const SellerDashboardScreen()),
       GoRoute(
           path: '/intelligence',
           builder: (context, state) => IntelligenceHubScreen(
