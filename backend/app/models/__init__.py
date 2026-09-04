@@ -45,6 +45,10 @@ from app.models.intelligence import (
     MarketPriceSource, WeatherRecord,
 )
 from app.models.notifications import Notification, NotificationBatch, NotificationPreference
+from app.models.posts import (
+    Comment, CommentReaction, ContentReport, Post, PostReaction, PostShare, SavedPost,
+    UserFollow,
+)
 from app.models.admin import (
     AuditLog, DeletionRequest, Dispute, DisputeEvidence, ExportRequest, RiskEvent,
     SyncOperation,

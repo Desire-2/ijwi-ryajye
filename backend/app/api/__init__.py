@@ -15,6 +15,7 @@ def register_api(app):
         messaging,
         opportunities,
         platform,
+        posts,
         social_api,
         social_features,
         trade,
@@ -161,6 +162,28 @@ def register_api(app):
     add("/api/v1/channels/<channel_id>/unfollow", view_func=social_api.unfollow_channel, methods=["POST"])
     add("/api/v1/channels/<channel_id>/posts", view_func=social_api.channel_posts, methods=["GET"])
     add("/api/v1/channels/<channel_id>/posts", view_func=social_api.create_channel_post, methods=["POST"])
+
+    # ---- Posts / comments / reactions ----
+    add("/api/v1/posts", view_func=posts.create_post, methods=["POST"])
+    add("/api/v1/posts", view_func=posts.list_posts, methods=["GET"])
+    add("/api/v1/posts/saved", view_func=posts.saved_posts, methods=["GET"])
+    add("/api/v1/posts/<post_id>", view_func=posts.post_detail, methods=["GET"])
+    add("/api/v1/posts/<post_id>", view_func=posts.patch_post, methods=["PATCH"])
+    add("/api/v1/posts/<post_id>", view_func=posts.delete_post, methods=["DELETE"])
+    add("/api/v1/posts/<post_id>/pin", view_func=posts.pin_post, methods=["POST"])
+    add("/api/v1/posts/<post_id>/best-answer", view_func=posts.mark_best_answer, methods=["POST"])
+    add("/api/v1/posts/<post_id>/comments", view_func=posts.list_comments, methods=["GET"])
+    add("/api/v1/posts/<post_id>/comments", view_func=posts.create_comment, methods=["POST"])
+    add("/api/v1/posts/<post_id>/react", view_func=posts.react_post, methods=["POST"])
+    add("/api/v1/posts/<post_id>/save", view_func=posts.save_post, methods=["POST"])
+    add("/api/v1/comments/<comment_id>/replies", view_func=posts.list_replies, methods=["GET"])
+    add("/api/v1/comments/<comment_id>", view_func=posts.delete_comment, methods=["DELETE"])
+    add("/api/v1/comments/<comment_id>/react", view_func=posts.react_comment, methods=["POST"])
+
+    # ---- Follows / reports ----
+    add("/api/v1/users/<user_id>/follow", view_func=posts.follow_user, methods=["POST"])
+    add("/api/v1/users/<user_id>/unfollow", view_func=posts.unfollow_user, methods=["POST"])
+    add("/api/v1/reports", view_func=posts.report_content, methods=["POST"])
 
     # ---- Status / polls / events ----
     add("/api/v1/statuses", view_func=social_features.create_status, methods=["POST"])

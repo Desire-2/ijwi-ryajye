@@ -3,9 +3,14 @@ import os
 import re
 import sys
 import uuid
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ.setdefault("DATABASE_URL", "postgresql+psycopg2://ijwi:ijwi_dev@127.0.0.1:5433/ijwi_ryajye")
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+os.environ.setdefault("DATABASE_URL", "postgresql+psycopg2://ijwi:ijwi_dev@127.0.0.1:5432/ijwi_ryajye")
 
 from app.app import create_app
 from app.services import auth_service

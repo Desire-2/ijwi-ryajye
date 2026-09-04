@@ -6,53 +6,14 @@ import '../../core/i18n/i18n_provider.dart';
 import '../../core/network/api_client.dart';
 import '../../core/theme/design_system.dart';
 import '../../shared/widgets/ui.dart';
+import 'community_models.dart';
+import 'community_service.dart';
+import 'post_card.dart';
 
-class _CommunityRow {
-  _CommunityRow.fromJson(Map<String, dynamic> j)
-      : id = j['id'] as String,
-        name = j['name'] as String? ?? '',
-        description = j['description'] as String? ?? '',
-        memberCount = (j['member_count'] as num?)?.toInt() ?? 0,
-        joined = j['joined'] == true || j['is_member'] == true;
-
-  final String id;
-  final String name;
-  final String description;
-  final int memberCount;
-  final bool joined;
-}
-
-class _GroupRow {
-  _GroupRow.fromJson(Map<String, dynamic> j)
-      : id = j['id'] as String,
-        name = j['name'] as String? ?? '',
-        memberCount = (j['member_count'] as num?)?.toInt() ?? 0,
-        myRole = j['my_role'] as String?,
-        isPrivate = j['is_private'] == true;
-
-  final String id;
-  final String name;
-  final int memberCount;
-  final String? myRole;
-  final bool isPrivate;
-}
-
-class _ChannelRow {
-  _ChannelRow.fromJson(Map<String, dynamic> j)
-      : id = j['id'] as String,
-        title = (j['title'] as String?) ?? (j['name'] as String?) ?? 'Channel',
-        followers = ((j['follower_count'] as num?) ??
-                (j['subscriber_count'] as num?) ??
-                (j['member_count'] as num?) ??
-                0)
-            .toInt();
-
-  final String id;
-  final String title;
-  final int followers;
-}
-
-/// Community hub: Communities · Groups · Channels.
+/// The social heart of Ijwi Ryajye.
+///
+/// Provides the entry points to the whole communication ecosystem:
+/// statuses, feed, discover, groups, channels, opportunities.
 class CommunityScreen extends ConsumerStatefulWidget {
   const CommunityScreen({super.key});
 
@@ -62,56 +23,471 @@ class CommunityScreen extends ConsumerStatefulWidget {
 
 class _CommunityScreenState extends ConsumerState<CommunityScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabs = TabController(length: 3, vsync: this);
+  late final TabController _tabs = TabController(length: 2, vsync: this);
 
-  List<_CommunityRow>? _communities;
-  List<_GroupRow>? _groups;
-  List<_ChannelRow>? _channels;
-  String? _errorGroups;
+  List<Post>? _feed;
+  List<StatusData>? _statuses;
+  List<CommunityProfile>? _recommended;
+  List<CommunityGroupProfile>? _groups;
+  List<ChannelProfile>? _channels;
+  List<Opportunity>? _opportunities;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _loadCommunities();
-    _loadGroups();
-    _loadChannels();
+    _load(showRefresh: false);
   }
 
-  Future<void> _loadCommunities() async {
+  Future<void> _load({bool showRefresh = true}) async {
+    final svc = ref.read(communityServiceProvider);
     try {
-      final res =
-          await ref.read(apiClientProvider).getJson('/communities');
-      setState(() => _communities = (res['communities'] as List? ??
-              res['items'] as List? ??
-              const [])
-          .map((j) => _CommunityRow.fromJson(j as Map<String, dynamic>))
-          .toList());
-    } catch (_) {}
-  }
-
-  Future<void> _loadGroups() async {
-    try {
-      final res = await ref.read(apiClientProvider).getJson('/groups');
+      final results = await Future.wait([
+        svc.listPosts(forYou: true, perPage: 20),
+        svc.listStatuses(),
+        svc.recommendedCommunities(),
+        svc.listGroups(),
+        svc.listChannels(),
+      ]);
+      if (!mounted) return;
       setState(() {
-        _groups = (res['groups'] as List? ?? const [])
-            .map((j) => _GroupRow.fromJson(j as Map<String, dynamic>))
-            .toList();
-        _errorGroups = null;
+        _feed = results[0] as List<Post>;
+        _statuses = results[1] as List<StatusData>;
+        _recommended = results[2] as List<CommunityProfile>;
+        _groups = results[3] as List<CommunityGroupProfile>;
+        _channels = results[4] as List<ChannelProfile>;
+        _error = null;
       });
+      _loadOpportunities();
     } catch (e) {
-      setState(() => _errorGroups = ApiClient.errorMessage(e));
+      if (!mounted) return;
+      setState(() => _error = ApiClient.errorMessage(e));
     }
   }
 
-  Future<void> _loadChannels() async {
+  Future<void> _loadOpportunities() async {
     try {
-      final res = await ref.read(apiClientProvider).getJson('/channels');
-      setState(() => _channels = (res['channels'] as List? ??
-              res['items'] as List? ??
-              const [])
-          .map((j) => _ChannelRow.fromJson(j as Map<String, dynamic>))
-          .toList());
+      final opps = await ref
+          .read(communityServiceProvider)
+          .listBuyerRequests();
+      if (!mounted) return;
+      setState(() => _opportunities = opps);
     } catch (_) {}
+  }
+
+  void _updatePost(Post updated) {
+    setState(() {
+      _feed = _feed?.map((p) => p.id == updated.id ? updated : p).toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tr = ref.watch(trProvider);
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(tr('community')),
+        actions: [
+          IconButton(
+              tooltip: 'Search',
+              onPressed: () => context.push('/community/search'),
+              icon: const Icon(Icons.search)),
+          IconButton(
+              tooltip: 'Create post',
+              onPressed: () => context.push('/community/post/new'),
+              icon: const Icon(Icons.add_circle_outline)),
+        ],
+        bottom: TabBar(
+          controller: _tabs,
+          indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white60,
+          tabs: const [Tab(text: 'Feed'), Tab(text: 'Discover')],
+        ),
+      ),
+      body: TabBarView(controller: _tabs, children: [
+        _feedTab(),
+        _discoverTab(),
+      ]),
+    );
+  }
+
+  Widget _feedTab() {
+    final statuses = _statuses;
+    return RefreshIndicator(
+      onRefresh: () => _load(),
+      child: _feed == null && _error == null
+          ? ListView(
+              padding: const EdgeInsets.all(12),
+              children: const [
+                Skeleton(height: 90),
+                Skeleton(height: 140),
+                Skeleton(height: 90),
+                Skeleton(height: 140),
+                Skeleton(height: 90),
+              ],
+            )
+          : _error != null && _feed == null
+              ? ListView(children: [
+                  ErrorBox(_error!, onRetry: _load),
+                ])
+              : ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  itemCount:
+                      (_feed?.length ?? 0) + (statuses != null ? 2 : 0) + 1,
+                  itemBuilder: (context, i) {
+                    if (i == 0) {
+                      return _composerBar(context);
+                    }
+                    if (statuses != null && i == 1) {
+                      return _statusRow(context, statuses);
+                    }
+                    final idx = i - (statuses != null ? 2 : 1);
+                    final posts = _feed!;
+                    if (idx >= posts.length) {
+                      return const SizedBox.shrink();
+                    }
+                    final p = posts[idx];
+                    return PostCard(
+                        post: p, onChanged: _updatePost);
+                  },
+                ),
+    );
+  }
+
+  Widget _composerBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+      child: Card(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(IjwiRadius.md),
+          onTap: () => context.push('/community/post/new'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(children: [
+              const Icon(Icons.edit_outlined, color: IjwiColors.green),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  "What's happening on your farm?",
+                  style: TextStyle(color: IjwiColors.muted),
+                ),
+              ),
+              const Icon(Icons.photo_outlined, color: IjwiColors.muted),
+              const SizedBox(width: 12),
+              const Icon(Icons.mic_none_outlined, color: IjwiColors.muted),
+              const SizedBox(width: 12),
+              const Icon(Icons.help_outline, color: IjwiColors.blue),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _statusRow(BuildContext context, List<StatusData> statuses) {
+    final visible =
+        statuses.where((s) => !s.viewed).take(12).toList();
+    if (visible.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      height: 96,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        itemCount: visible.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (context, i) {
+          final s = visible[i];
+          return GestureDetector(
+            onTap: () => context.push('/community/statuses'),
+            child: Column(children: [
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: IjwiColors.green, width: 2.5),
+                ),
+                child: IjwiAvatar(s.author.displayName, size: 48),
+              ),
+              const SizedBox(height: 4),
+              SizedBox(
+                width: 60,
+                child: Text(
+                  s.author.displayName.split(' ').first,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 11),
+                ),
+              ),
+            ]),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _discoverTab() {
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.only(bottom: 24),
+        children: [
+          _heroCard(context),
+          if (_opportunities != null && _opportunities!.isNotEmpty) ...[
+            SectionHeader('Opportunities',
+                actionLabel: 'See all',
+                onAction: () => context.push('/community/opportunities')),
+            _opportunityStrip(context, _opportunities!),
+          ],
+          SectionHeader('Recommended communities',
+              actionLabel: 'Discover',
+              onAction: () => context.push('/community/discover')),
+          _recommendedRow(context),
+          SectionHeader('Your groups',
+              actionLabel: 'Create',
+              onAction: _createGroup),
+          if (_groups == null)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Skeleton(height: 72),
+            )
+          else if (_groups!.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: EmptyState(
+                icon: Icons.groups_2,
+                title: 'Join a group',
+                message:
+                    'Groups connect farmers by crop, location and purpose.',
+                actionLabel: 'Create group',
+                onAction: _createGroup,
+              ),
+            )
+          else
+            for (final g in _groups!.take(6)) _groupTile(context, g),
+          SectionHeader('Channels',
+              actionLabel: 'Explore',
+              onAction: () => context.push('/community/discover')),
+          if (_channels == null)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Skeleton(height: 72),
+            )
+          else
+            for (final c in _channels!.take(4)) _channelTile(context, c),
+        ],
+      ),
+    );
+  }
+
+  Widget _heroCard(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1B7A43), Color(0xFF0F5A2F)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(IjwiRadius.lg),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text(
+          'Your Agriculture Network',
+          style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Learn. Connect. Trade. Grow.',
+          style: TextStyle(color: Colors.white70, fontSize: 14),
+        ),
+        const SizedBox(height: 14),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: IjwiColors.green,
+            minimumSize: const Size(0, 40),
+          ),
+          onPressed: () => context.push('/community/discover'),
+          child: const Text('Discover communities'),
+        ),
+      ]),
+    );
+  }
+
+  Widget _opportunityStrip(BuildContext context, List<Opportunity> opps) {
+    return SizedBox(
+      height: 110,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: opps.take(6).length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, i) {
+          final o = opps[i];
+          return Container(
+            width: 220,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: IjwiColors.red.withOpacity(0.08),
+              border: Border.all(color: IjwiColors.red.withOpacity(0.3)),
+              borderRadius: BorderRadius.circular(IjwiRadius.md),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(children: [
+                  Icon(Icons.local_fire_department,
+                      size: 14, color: IjwiColors.red),
+                  SizedBox(width: 4),
+                  Text('BUYER REQUEST',
+                      style: TextStyle(
+                          color: IjwiColors.red,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800)),
+                ]),
+                const SizedBox(height: 4),
+                Text(o.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(
+                    '${o.product ?? ''}${o.quantityValue != null ? ' · ${_num(o.quantityValue!)} ${o.unitCode}' : ''}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 12, color: IjwiColors.muted)),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _recommendedRow(BuildContext context) {
+    final recs = _recommended;
+    if (recs == null) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        child: Skeleton(height: 90),
+      );
+    }
+    if (recs.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        child: Text('No community suggestions yet',
+            style: TextStyle(color: IjwiColors.muted)),
+      );
+    }
+    return SizedBox(
+      height: 92,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: recs.take(8).length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, i) {
+          final c = recs[i];
+          return GestureDetector(
+            onTap: () => context.push('/community/${c.id}'),
+            child: Container(
+              width: 140,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: IjwiColors.greenLight,
+                borderRadius: BorderRadius.circular(IjwiRadius.md),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(c.iconEmoji, style: const TextStyle(fontSize: 22)),
+                  const SizedBox(height: 4),
+                  Text(c.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 13)),
+                  Text('${c.memberCount} members',
+                      style: const TextStyle(
+                          fontSize: 11, color: IjwiColors.muted)),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _groupTile(BuildContext context, CommunityGroupProfile g) {
+    return Card(
+      child: ListTile(
+        leading: IjwiAvatar(g.name, isGroup: true),
+        title: Row(children: [
+          Expanded(
+              child: Text(g.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700))),
+          if (g.isPrivate)
+            Icon(Icons.lock_outline, size: 15, color: Colors.grey.shade500),
+        ]),
+        subtitle: Text('${g.memberCount} members'
+            '${g.isMember ? " · you: ${g.myRole!.toLowerCase().replaceAll("_", " ")}" : ""}'),
+        trailing: g.isMember
+            ? IconButton(
+                tooltip: 'Open group',
+                icon: const Icon(Icons.chevron_right),
+                onPressed: () => context.push('/community/group/${g.id}'))
+            : OutlinedButton(
+                style: OutlinedButton.styleFrom(minimumSize: const Size(70, 34)),
+                onPressed: () async {
+                  try {
+                    await ref
+                        .read(communityServiceProvider)
+                        .joinGroup(g.id);
+                    await _load();
+                  } catch (_) {}
+                },
+                child: const Text('Join')),
+        onTap: () => context.push('/community/group/${g.id}'),
+      ),
+    );
+  }
+
+  Widget _channelTile(BuildContext context, ChannelProfile ch) {
+    return Card(
+      child: ListTile(
+        leading: const CircleAvatar(
+            backgroundColor: Color(0xFFEDE9FE),
+            child: Icon(Icons.campaign_outlined, color: IjwiColors.blue)),
+        title: Text(ch.name,
+            style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text('${ch.subscriberCount} followers'),
+        trailing: ch.followed
+            ? const Icon(Icons.check, color: IjwiColors.green)
+            : IconButton(
+                icon: const Icon(Icons.add_alert_outlined),
+                tooltip: 'Follow',
+                onPressed: () async {
+                  try {
+                    await ref
+                        .read(communityServiceProvider)
+                        .followChannel(ch.id);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Following')));
+                  } catch (_) {}
+                }),
+        onTap: () => context.push('/community/channel/${ch.id}'),
+      ),
+    );
   }
 
   Future<void> _createGroup() async {
@@ -132,8 +508,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
             controller: nameCtl,
             textCapitalization: TextCapitalization.words,
             autofocus: true,
-            decoration:
-                const InputDecoration(labelText: 'Group name'),
+            decoration: const InputDecoration(labelText: 'Group name'),
           ),
           const SizedBox(height: 16),
           FilledButton(
@@ -144,9 +519,9 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
     );
     if (created != true || nameCtl.text.trim().length < 2) return;
     try {
-      await ref.read(apiClientProvider).postJson('/groups',
+      await ref.read(communityServiceProvider).createGroup(
           {'name': nameCtl.text.trim(), 'require_approval': false});
-      await _loadGroups();
+      await _load();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -155,227 +530,6 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
     }
   }
 
-  Future<void> _joinGroup(_GroupRow g) async {
-    if (g.myRole != null) {
-      // Already a member → open its chat room.
-      context.go('/chat/${g.id}?group=1');
-      return;
-    }
-    try {
-      final res = await ref
-          .read(apiClientProvider)
-          .postJson('/groups/${g.id}/join', {});
-      final state = res['state'];
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(state == 'PENDING'
-                ? 'Join request sent — waiting for approval.'
-                : 'Welcome to ${g.name}!')));
-      }
-      await _loadGroups();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(ApiClient.errorMessage(e))));
-      }
-    }
-  }
-
-  /// Group chat rooms are conversations with group_id; resolve mine and open.
-  Future<void> _openGroupChat(_GroupRow g) async {
-    try {
-      final res = await ref
-          .read(apiClientProvider)
-          .getJson('/conversations', query: {'type': 'GROUP'});
-      final convs = (res['conversations'] as List? ?? const [])
-          .map((j) => j as Map<String, dynamic>)
-          .toList();
-      final match =
-          convs.where((c) => c['group_id'] == g.id).toList();
-      if (!mounted) return;
-      if (match.isNotEmpty) {
-        context.go('/chat/${match.first['id']}');
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Join the group first to open its chat.')));
-      }
-    } catch (_) {}
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tr = ref.watch(trProvider);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(tr('community')),
-        actions: [
-          IconButton(
-              tooltip: 'Create group',
-              onPressed: _createGroup,
-              icon: const Icon(Icons.add_circle_outline)),
-        ],
-        bottom: TabBar(
-          controller: _tabs,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white60,
-          tabs: const [
-            Tab(text: 'Communities'),
-            Tab(text: 'Groups'),
-            Tab(text: 'Channels'),
-          ],
-        ),
-      ),
-      body: TabBarView(controller: _tabs, children: [
-        _communitiesTab(),
-        _groupsTab(),
-        _channelsTab(),
-      ]),
-    );
-  }
-
-  Widget _communitiesTab() {
-    final items = _communities;
-    return RefreshIndicator(
-      onRefresh: _loadCommunities,
-      child: items == null
-          ? ListView(children: const [Skeleton(height: 76), Skeleton(height: 76)])
-          : items.isEmpty
-              ? ListView(children: const [
-                  EmptyState(
-                      icon: Icons.public,
-                      title: 'No communities yet',
-                      message:
-                          'Regional farmer communities appear here once created.'),
-                ])
-              : ListView.builder(
-                  itemCount: items.length,
-                  itemBuilder: (context, i) {
-                    final c = items[i];
-                    return Card(
-                      child: ListTile(
-                        leading: const IjwiAvatar('', size: 44, isGroup: true),
-                        title: Text(c.name,
-                            style: const TextStyle(fontWeight: FontWeight.w700)),
-                        subtitle: Text(c.description.isEmpty
-                            ? '${c.memberCount} members'
-                            : c.description),
-                        trailing: OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                                minimumSize: const Size(70, 34)),
-                            onPressed: () async {
-                              try {
-                                await ref.read(apiClientProvider).postJson(
-                                    '/communities/${c.id}/join', {});
-                                await _loadCommunities();
-                              } catch (_) {}
-                            },
-                            child: Text(c.joined ? 'Open' : 'Join')),
-                      ),
-                    );
-                  }),
-    );
-  }
-
-  Widget _groupsTab() {
-    final tr = ref.watch(trProvider);
-    return RefreshIndicator(
-      onRefresh: _loadGroups,
-      child: _groups == null
-          ? (_errorGroups != null
-              ? ListView(children: [ErrorBox(_errorGroups!, onRetry: _loadGroups)])
-              : ListView(children: const [Skeleton(height: 76), Skeleton(height: 76)]))
-          : _groups!.isEmpty
-              ? ListView(children: [
-                  EmptyState(
-                      icon: Icons.groups_2,
-                      title: tr('community'),
-                      message:
-                          'Create a group for your cooperative, village or crop — chat, share listings and organize together.',
-                      actionLabel: 'Create group',
-                      onAction: _createGroup),
-                ])
-              : ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 20),
-                  itemCount: _groups!.length,
-                  itemBuilder: (context, i) {
-                    final g = _groups![i];
-                    final member = g.myRole != null;
-                    return Card(
-                      child: ListTile(
-                        leading: IjwiAvatar(g.name, isGroup: true),
-                        title: Row(children: [
-                          Expanded(
-                              child: Text(g.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w700))),
-                          if (g.isPrivate)
-                            Icon(Icons.lock_outline,
-                                size: 15, color: Colors.grey.shade500),
-                        ]),
-                        subtitle: Text(
-                            '${g.memberCount} members'
-                            '${member && g.myRole != null ? " · you: ${g.myRole!.toLowerCase().replaceAll("_", " ")}" : ""}'),
-                        trailing: member
-                            ? IconButton(
-                                tooltip: 'Open chat',
-                                icon: const Icon(Icons.chat_bubble_outline,
-                                    color: IjwiColors.green),
-                                onPressed: () => _openGroupChat(g))
-                            : null,
-                        onTap: () => _joinGroup(g),
-                      ),
-                    );
-                  }),
-    );
-  }
-
-  Widget _channelsTab() {
-    final items = _channels;
-    return RefreshIndicator(
-      onRefresh: _loadChannels,
-      child: items == null
-          ? ListView(children: const [Skeleton(height: 76)])
-          : items.isEmpty
-              ? ListView(children: const [
-                  EmptyState(
-                      icon: Icons.campaign_outlined,
-                      title: 'No channels yet',
-                      message:
-                          'Broadcast channels for market intelligence and training will appear here.'),
-                ])
-              : ListView.builder(
-                  itemCount: items.length,
-                  itemBuilder: (context, i) {
-                    final ch = items[i];
-                    return Card(
-                      child: ListTile(
-                        leading: const CircleAvatar(
-                            backgroundColor: Color(0xFFEDE9FE),
-                            child: Icon(Icons.campaign_outlined,
-                                color: IjwiColors.blue)),
-                        title: Text(ch.title,
-                            style: const TextStyle(fontWeight: FontWeight.w700)),
-                        subtitle: Text('${ch.followers} followers'),
-                        trailing: IconButton(
-                            icon: const Icon(Icons.add_alert_outlined),
-                            tooltip: 'Follow',
-                            onPressed: () async {
-                              try {
-                                await ref.read(apiClientProvider).postJson(
-                                    '/channels/${ch.id}/follow', {});
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                          content: Text('Following')));
-                                }
-                              } catch (_) {}
-                            }),
-                      ),
-                    );
-                  }),
-    );
-  }
+  String _num(double v) =>
+      v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
 }

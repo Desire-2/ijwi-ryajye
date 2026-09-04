@@ -4,7 +4,17 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/chat/chat_screen.dart';
 import '../../features/chat/conversations_screen.dart';
+import '../../features/community/channel_detail_screen.dart';
+import '../../features/community/community_profile_screen.dart';
 import '../../features/community/community_screen.dart';
+import '../../features/community/community_search_screen.dart';
+import '../../features/community/create_post_screen.dart';
+import '../../features/community/discover_screen.dart';
+import '../../features/community/opportunities_screen.dart';
+import '../../features/community/status_viewer_screen.dart';
+import '../../features/community/group_detail_screen.dart';
+import '../../features/community/farmer_profile_screen.dart';
+import '../../features/community/post_detail_screen.dart';
 import '../../features/intelligence/intelligence_hub.dart';
 import '../../features/market/market_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
@@ -110,6 +120,46 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: '/chat/:id',
           builder: (context, state) =>
               ChatScreen(conversationId: state.pathParameters['id']!)),
+      // ---- Community sub-routes ----
+      GoRoute(
+          path: '/community/discover',
+          builder: (_, __) => const DiscoverScreen()),
+      GoRoute(
+          path: '/community/search',
+          builder: (_, __) => const CommunitySearchScreen()),
+      GoRoute(
+          path: '/community/statuses',
+          builder: (_, __) => const StatusViewerScreen()),
+      GoRoute(
+          path: '/community/opportunities',
+          builder: (_, __) => const OpportunitiesScreen()),
+      GoRoute(
+          path: '/community/post/new',
+          builder: (context, state) {
+            final gid = state.uri.queryParameters['groupId'];
+            final cid = state.uri.queryParameters['communityId'];
+            return CreatePostScreen(groupId: gid, communityId: cid);
+          }),
+      GoRoute(
+          path: '/community/post/:id',
+          builder: (context, state) =>
+              PostDetailScreen(postId: state.pathParameters['id']!)),
+      GoRoute(
+          path: '/community/group/:id',
+          builder: (context, state) =>
+              GroupDetailScreen(groupId: state.pathParameters['id']!)),
+      GoRoute(
+          path: '/community/channel/:id',
+          builder: (context, state) =>
+              ChannelDetailScreen(channelId: state.pathParameters['id']!)),
+      GoRoute(
+          path: '/community/farmer/:id',
+          builder: (context, state) =>
+              FarmerProfileScreen(userId: state.pathParameters['id']!)),
+      GoRoute(
+          path: '/community/:id',
+          builder: (context, state) => CommunityProfileScreen(
+              communityId: state.pathParameters['id']!)),
     ],
   );
   return router;
