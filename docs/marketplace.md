@@ -100,7 +100,7 @@ All amounts are **integer minor units** (100 minor = 1 RWF). Auth `Authorization
 | --------- | ------- | ----- |
 | `myListings()` | GET `/listings/mine` | seller rows across every state incl. `DRAFT` |
 | `createListing(payload)` | POST `/listings` | body accepts `state: DRAFT\|ACTIVE` (default ACTIVE), `attributes: {…}` (flexible per-kind scalars), full create fields + `media[{storage_key,…}]`. Drafts skip pricing rules and never create inventory. |
-| `updateListing(id, patch)` | PATCH `/listings/{id}` | Drafts accept **every creation field**; live listings only the presentation subset + price/state. `state=ACTIVE` via patch is rejected → use publish. |
+| `updateListing(id, patch)` | PATCH `/listings/{id}` | Drafts accept **every creation field**; live listings accept presentation fields + `price_minor` + **`available_quantity`** (restock/trim reconciles the inventory batch, guarded against trimming below committed offers/bids, never below zero; `SOLD_OUT` reopens automatically on restock). `state=ACTIVE` via patch is rejected → use publish. |
 | `publishListing(id)` | POST `/listings/{id}/publish` | DRAFT→ACTIVE: enforces live-commercial rules (price required unless auction; auction needs `auction_end_at`), stamps `expires_at`, creates the **single** inventory batch (`listing-{id[:8]}`), audits + emits `listing.created`. Idempotent under row lock. |
 | `attachListingMedia(id, media)` | POST `/listings/{id}/media` | append uploaded `storage_key`s to an existing (draft) listing |
 | `closeListing(id)` | POST `/listings/{id}/close` | |
@@ -291,6 +291,20 @@ Flask API (backend) / SQLite cache
   subtitle and “Continue draft” menu action.
 - Listing detail renders description + flexible-attribute chips (engine labels) under the
   seller card; product cards keep emoji tiles.
+
+### Live listing editing (spec §75–79/§80 archive)
+- Backend: PATCH on a live listing now accepts `available_quantity` — stock changes are
+  reconciled against the listing's inventory batch (`quantity_total` moves with the delta,
+  inventory AVAILABLE/SOLD state maintained), guarded against trimming below what is
+  committed to pending offers/bids and against closing/expired listings; topping up above
+  the original quantity grows the listing capacity (restocking). Setting 0 marks the
+  listing `SOLD_OUT`; restocking flips it back to `ACTIVE`. Live price/title/description/
+  delivery/negotiable edits were already supported.
+- Flutter: `ListingEditScreen` at `/sell/edit?id=` (entry: ⋮ → “Edit listing” on
+  ACTIVE/PAUSED/SOLD_OUT rows in My Listings). Edits price, available quantity, title,
+  description, delivery options, negotiable, quality grade and variety, with inline
+  pause/activate/close. Auctions keep their price (server rule).
+- Regression tests: `tests/integration/test_live_listing_editing.py`.
 
 ### Reviews on farmer profiles & listing detail (spec §81–83)
 - New `GET /api/v1/users/<id>/reviews` (`account.user_reviews`): a user's received reviews

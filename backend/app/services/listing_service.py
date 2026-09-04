@@ -228,6 +228,11 @@ def _apply_live_restricted(listing, patch, user):
             setattr(listing, key, _apply_delivery(value) if key == "delivery_options" else value)
     if "attributes" in patch:
         listing.attributes_json = _normalize_attributes({"attributes": patch["attributes"]})
+    # Live sellers may top up or trim what they can sell. Every change is
+    # reconciled against the listing's own inventory batch so the marketplace
+    # and stock never drift, and never dips below committed reservations.
+    if "available_quantity" in patch:
+        _adjust_live_available(listing, patch["available_quantity"])
     if "state" in patch:
         new_state = patch["state"]
         if new_state not in ("ACTIVE", "PAUSED", "CLOSED"):
@@ -244,6 +249,73 @@ def _apply_live_restricted(listing, patch, user):
         listing.price_minor = int(patch["price_minor"])
     db.session.commit()
     audit(user, "listing.updated", "listing", listing.id, {"fields": list(patch.keys())})
+
+
+def _adjust_live_available(listing, new_available):
+    """Change how much of a live listing is sellable, moving stock accordingly.
+
+    Inventory is the source of truth: the delta between the old and new
+    sellable amount is applied to the listing's inventory batch total. Sellers
+    cannot trim below what is already committed to pending offers/bids.
+    """
+    from decimal import Decimal as D
+    from app.models.marketplace import Inventory, InventoryReservation
+
+    new_avail = D(str(new_available))
+    if new_avail < 0:
+        raise bad_request("available_quantity cannot be negative")
+    if listing.state in ("EXPIRED", "CLOSED"):
+        raise bad_request(f"Cannot change quantity of a {listing.state.lower()} listing")
+    # Available cannot exceed the listing's stated capacity; topping up stock
+    # above the original quantity therefore grows the capacity too.
+    old_capacity = D(str(listing.quantity_value))
+    if new_avail > old_capacity:
+        listing.quantity_value = new_avail
+
+    inv = Inventory.query.filter_by(
+        owner_id=listing.seller_id, batch_ref=f"listing-{listing.id[:8]}"
+    ).first()
+    if inv is None:
+        raise bad_request("This listing has no inventory batch yet")
+
+    committed = (
+        InventoryReservation.query.filter(
+            InventoryReservation.listing_id == listing.id,
+            InventoryReservation.status == "ACTIVE",
+            InventoryReservation.order_id.is_(None),
+        ).with_entities(
+            db.func.coalesce(db.func.sum(InventoryReservation.quantity_value), 0)
+        ).scalar()
+    ) or 0
+    if new_avail < D(str(committed)):
+        raise bad_request(
+            f"Cannot go below the {committed:g} {listing.unit_code} already "
+            "committed to pending offers/bids"
+        )
+
+    old_avail = D(str(listing.available_quantity))
+    delta = new_avail - old_avail
+    if delta:
+        if db.engine.dialect.name != "sqlite":
+            db.session.execute(
+                db.text("SELECT id FROM inventories WHERE id = :id FOR UPDATE"),
+                {"id": inv.id},
+            )
+        new_total = D(str(inv.quantity_total)) + delta
+        reserved_sold = D(str(inv.quantity_reserved)) + D(str(inv.quantity_sold))
+        if new_total < reserved_sold:
+            raise bad_request("Not enough stock to reduce available quantity")
+        inv.quantity_total = new_total
+        if new_total <= reserved_sold:
+            inv.state = "SOLD"
+        elif inv.state in ("SOLD", "EXPIRED"):
+            inv.state = "AVAILABLE"
+
+    listing.available_quantity = new_avail
+    if new_avail <= 0:
+        listing.state = "SOLD_OUT"
+    elif listing.state == "SOLD_OUT":
+        listing.state = "ACTIVE"
 
 
 def _update_draft(listing, patch, user):

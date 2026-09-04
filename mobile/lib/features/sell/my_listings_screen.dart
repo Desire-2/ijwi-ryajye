@@ -184,6 +184,11 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
                                 await _load();
                                 return;
                               }
+                              if (v == 'edit-live') {
+                                await context.push('/sell/edit?id=${l.id}');
+                                await _load();
+                                return;
+                              }
                               if (v == 'close') _closeListing(l);
                               if (v == 'pause') _setState(l, 'PAUSED');
                               if (v == 'activate') _setState(l, 'ACTIVE');
@@ -193,6 +198,12 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
                                 const PopupMenuItem(
                                     value: 'edit',
                                     child: Text('Continue draft')),
+                              if (l.state == 'ACTIVE' ||
+                                  l.state == 'PAUSED' ||
+                                  l.state == 'SOLD_OUT')
+                                const PopupMenuItem(
+                                    value: 'edit-live',
+                                    child: Text('Edit listing')),
                               if (l.state == 'ACTIVE')
                                 const PopupMenuItem(
                                     value: 'pause',

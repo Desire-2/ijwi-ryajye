@@ -23,6 +23,7 @@ import '../../features/market/search_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/sell/create_listing_screen.dart';
+import '../../features/sell/listing_edit_screen.dart';
 import '../../features/sell/my_listings_screen.dart';
 import '../../features/sell/seller_dashboard_screen.dart';
 import '../../features/splash/splash_screen.dart';
@@ -121,12 +122,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           builder: (_, __) => const BuyerRequestsScreen()),
       GoRoute(
           path: '/market/favorites',
-          builder: (_, __) => const FavoritesScreen()),
-      GoRoute(path: '/sell', builder: (_, __) => const MyListingsScreen()),
+          builder: (_, __) => const FavoritesScreen()),      GoRoute(
+          path: '/sell', builder: (_, __) => const MyListingsScreen()),
       GoRoute(
           path: '/sell/new',
           builder: (context, state) => CreateListingScreen(
               initialListingId: state.uri.queryParameters['id'])),
+      GoRoute(
+          path: '/sell/edit',
+          builder: (context, state) => ListingEditScreen(
+              listingId: state.uri.queryParameters['id'] ?? '')),
       GoRoute(
           path: '/sell/dashboard',
           builder: (_, __) => const SellerDashboardScreen()),
