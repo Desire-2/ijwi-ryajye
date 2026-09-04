@@ -13,6 +13,8 @@ import '../../features/market/marketplace_models.dart';
 import '../../features/market/marketplace_repository.dart';
 import '../../features/market/marketplace_widgets.dart';
 import '../../features/market/review_widgets.dart';
+import '../../features/sell/listing_wizard_engine.dart';
+
 import '../../shared/widgets/ui.dart';
 
 /// Full listing detail: media, price/availability, trust, quality, delivery
@@ -341,6 +343,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
                       _mainInfo(l),
                       if (l.isAuction) _auctionPanel(l, isMyListing),
                       _detailRows(l),
+                      _aboutSection(l),
                       _sellerCard(l),
                       if (l.seller != null)
                         SellerReviewsPreview(sellerId: l.seller!.id),
@@ -492,6 +495,57 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
               icon: const Icon(Icons.check),
               label: const Text('Accept winning bid'),
             ),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  /// Description + the listing's flexible per-kind attributes (breed, weight,
+  /// condition, route...), labelled from the same engine the wizard uses.
+  Widget _aboutSection(Listing l) {
+    final attrs = l.attributes.entries
+        .where((e) => e.value != null && e.value.toString().trim().isNotEmpty)
+        .toList();
+    final hasDescription = l.description.trim().isNotEmpty;
+    final hasVariety = l.variety.trim().isNotEmpty && !attrs.any((e) => e.key == 'variety');
+    if (!hasDescription && !hasVariety && attrs.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('About this offer',
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+          if (hasDescription) ...[
+            const SizedBox(height: 8),
+            Text(l.description,
+                style: const TextStyle(fontSize: 13.5, height: 1.45)),
+          ],
+          if (hasVariety || attrs.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              if (hasVariety)
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  backgroundColor: IjwiColors.greenLight,
+                  label: Text('Variety: ${l.variety}',
+                      style: const TextStyle(
+                          fontSize: 11.5, fontWeight: FontWeight.w700)),
+                ),
+              for (final e in attrs)
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  backgroundColor: IjwiColors.greenLight,
+                  label: Text(
+                      '${attributeLabel(e.key)}: '
+                      '${formatAttributeValue(e.key, e.value)}',
+                      style: const TextStyle(
+                          fontSize: 11.5, fontWeight: FontWeight.w700)),
+                ),
+            ]),
           ],
         ]),
       ),

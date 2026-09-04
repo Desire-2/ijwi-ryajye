@@ -11,13 +11,33 @@ class ProductSummary {
         slug = j['slug'] as String? ?? '',
         emoji = j['emoji'] as String? ?? '🌱',
         categoryName =
-            (j['category'] as Map<String, dynamic>?)?['name'] as String?;
+            (j['category'] as Map<String, dynamic>?)?['name'] as String?,
+        categorySlug =
+            (j['category'] as Map<String, dynamic>?)?['slug'] as String?,
+        categoryIcon =
+            (j['category'] as Map<String, dynamic>?)?['icon'] as String?,
+        defaultUnit = j['default_unit'] as String? ?? 'kg';
 
   final String id;
   final String name;
   final String slug;
   final String emoji;
+  final String defaultUnit;
   final String? categoryName;
+  final String? categorySlug;
+  final String? categoryIcon;
+}
+
+/// One row of GET /units — the backend-managed unit catalogue.
+class UnitOption {
+  UnitOption.fromJson(Map<String, dynamic> j)
+      : code = j['code'] as String? ?? '',
+        label = j['label'] as String? ?? '',
+        dimension = j['dimension'] as String?;
+
+  final String code;
+  final String label;
+  final String? dimension;
 }
 
 class Category {
@@ -67,8 +87,7 @@ class SellerCard {
       completedTransactions > 0 || reputationTier != 'NEW_MEMBER';
 }
 
-/// `listing_json` payload. `description` is intentionally absent — the
-/// backend serializer does not include it.
+/// `listing_json` payload.
 class Listing {
   Listing.fromJson(Map<String, dynamic> j)
       : id = j['id'] as String,
@@ -81,6 +100,9 @@ class Listing {
         productEmoji =
             (j['product'] as Map<String, dynamic>?)?['emoji'] as String? ??
                 '🌱',
+        description = j['description'] as String? ?? '',
+        attributes =
+            (j['attributes'] as Map<String, dynamic>?) ?? const {},
         variety = j['variety'] as String? ?? '',
         quantityValue = (j['quantity_value'] as num?)?.toDouble() ?? 0,
         availableQuantity = (j['available_quantity'] as num?)?.toDouble() ?? 0,
@@ -117,6 +139,8 @@ class Listing {
   final String? productId;
   final String productName;
   final String productEmoji;
+  final String description;
+  final Map<String, dynamic> attributes;
   final String variety;
   final double quantityValue;
   final double availableQuantity;

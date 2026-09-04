@@ -30,7 +30,7 @@ class MyListingRow {
   final String emoji;
 }
 
-/// "Sell Your Harvest" hub: the farmer's own listings + entry point to publish.
+/// Seller hub: the user's own listings (drafts included) + entry to publish.
 class MyListingsScreen extends ConsumerStatefulWidget {
   const MyListingsScreen({super.key});
 
@@ -126,9 +126,7 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
         backgroundColor: IjwiColors.green,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
-        label: Text(tr('make_offer') == 'Make offer'
-            ? 'Sell Harvest'
-            : tr('btn_register')),
+        label: const Text('Create listing'),
         onPressed: () async {
           await context.push('/sell/new');
           await _load();
@@ -150,10 +148,9 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
                       icon: Icons.storefront_outlined,
                       title: 'No listings yet',
                       message:
-                          'Your harvest can reach buyers around you. Publish your first listing now.',
-                      actionLabel: tr('my_listings') == 'My listings'
-                          ? 'Sell Your Harvest'
-                          : tr('btn_register'),
+                          'Offer anything you grow, raise or provide — produce, '
+                          'livestock, equipment, services, transport and more.',
+                      actionLabel: 'Create listing',
                       onAction: () async {
                         await context.push('/sell/new');
                         await _load();
@@ -175,38 +172,59 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
                               style: const TextStyle(
                                   fontWeight: FontWeight.w700)),
                           subtitle: Text(
-                              '${formatRwf(l.priceMinor)}/${l.unit} · '
-                              '${l.available.toStringAsFixed(0)} ${l.unit} left'
-                              ' · ${l.listingType == "AUCTION" ? "Auction" : "Fixed"}'),
+                              l.state == 'DRAFT'
+                                  ? 'Draft — use ⋮ to continue it'
+                                  : '${formatRwf(l.priceMinor)}/${l.unit} · '
+                                      '${l.available.toStringAsFixed(0)} ${l.unit} left'
+                                      ' · ${l.listingType == "AUCTION" ? "Auction" : "Fixed"}'),
                           trailing: PopupMenuButton<String>(
-                            onSelected: (v) {
+                            onSelected: (v) async {
+                              if (v == 'edit') {
+                                await context.push('/sell/new?id=${l.id}');
+                                await _load();
+                                return;
+                              }
                               if (v == 'close') _closeListing(l);
                               if (v == 'pause') _setState(l, 'PAUSED');
                               if (v == 'activate') _setState(l, 'ACTIVE');
                             },
                             itemBuilder: (context) => [
+                              if (l.state == 'DRAFT')
+                                const PopupMenuItem(
+                                    value: 'edit',
+                                    child: Text('Continue draft')),
                               if (l.state == 'ACTIVE')
                                 const PopupMenuItem(
-                                    value: 'pause', child: Text('Pause listing')),
+                                    value: 'pause',
+                                    child: Text('Pause listing')),
                               if (l.state == 'PAUSED')
                                 const PopupMenuItem(
-                                    value: 'activate', child: Text('Activate listing')),
-                              const PopupMenuItem(
-                                  value: 'close', child: Text('Close listing')),
+                                    value: 'activate',
+                                    child: Text('Activate listing')),
+                              if (l.state != 'DRAFT')
+                                const PopupMenuItem(
+                                    value: 'close',
+                                    child: Text('Close listing')),
                             ],
                             child: Chip(
                               visualDensity: VisualDensity.compact,
-                              backgroundColor:
-                                  l.state == 'ACTIVE'
-                                      ? IjwiColors.greenLight
-                                      : const Color(0xFFEEE7DA),
-                              label: Text(l.state,
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w800,
-                                      color: l.state == 'ACTIVE'
-                                          ? IjwiColors.greenDark
-                                          : IjwiColors.muted)),
+                              backgroundColor: l.state == 'ACTIVE'
+                                  ? IjwiColors.greenLight
+                                  : (l.state == 'DRAFT'
+                                      ? const Color(0xFFFBEED2)
+                                      : const Color(0xFFEEE7DA)),
+                              label: Text(
+                                l.state == 'DRAFT' ? 'Draft' : l.state,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: l.state == 'ACTIVE'
+                                      ? IjwiColors.greenDark
+                                      : (l.state == 'DRAFT'
+                                          ? const Color(0xFF9A6B00)
+                                          : IjwiColors.muted),
+                                ),
+                              ),
                             ),
                           ),
                         ),

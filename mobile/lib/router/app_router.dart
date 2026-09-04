@@ -125,7 +125,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/sell', builder: (_, __) => const MyListingsScreen()),
       GoRoute(
           path: '/sell/new',
-          builder: (_, __) => const CreateListingScreen()),
+          builder: (context, state) => CreateListingScreen(
+              initialListingId: state.uri.queryParameters['id'])),
       GoRoute(
           path: '/sell/dashboard',
           builder: (_, __) => const SellerDashboardScreen()),

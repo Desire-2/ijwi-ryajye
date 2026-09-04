@@ -45,6 +45,9 @@ class CreateListingSchema(ma.Schema):
     title = ma.fields.String()
     description = ma.fields.String(missing="")
     listing_type = ma.fields.String(missing="FIXED_PRICE")
+    state = ma.fields.String(missing="ACTIVE",
+                             validate=ma.validate.OneOf(["DRAFT", "ACTIVE"]))
+    attributes = ma.fields.Dict()
     quantity_value = ma.fields.Float(required=True)
     available_quantity = ma.fields.Float()
     unit_code = ma.fields.String(missing="kg")
@@ -82,20 +85,73 @@ def create_listing():
         data["currency_code"] = current_app.config["DEFAULT_CURRENCY"]
     listing = listing_service.create_listing(user, data)
 
-    inventory_service.create_inventory(
-        owner_id=user.id,
-        product_id=data["product_id"],
-        quantity_value=data["quantity_value"],
-        unit_code=data.get("unit_code", "kg"),
-        farm_id=data.get("farm_id"),
-        batch_ref=f"listing-{listing.id[:8]}",
-    )
+    # Drafts are stored without inventory — stock is created once when the
+    # listing is published, so unfinished drafts never appear sellable.
+    if data.get("state") != "DRAFT":
+        inventory_service.create_inventory(
+            owner_id=user.id,
+            product_id=data["product_id"],
+            quantity_value=data["quantity_value"],
+            unit_code=data.get("unit_code", "kg"),
+            farm_id=data.get("farm_id"),
+            batch_ref=f"listing-{listing.id[:8]}",
+        )
+        db.session.commit()
+
+        from extensions import realtime
+
+        realtime.emit("listing.created", {"listing_id": listing.id})
+    else:
+        db.session.commit()
+    return {"listing": listing_json(listing)}, 201
+
+
+class AddListingMediaSchema(ma.Schema):
+    media = ma.fields.List(ma.fields.Dict(), required=True)
+
+
+@jwt_required()
+def add_listing_media(listing_id):
+    user = get_current_user()
+    data = parse_body(AddListingMediaSchema)
+    added = listing_service.add_listing_media(user, listing_id, data["media"])
+    db.session.commit()
+    return {"added": added}
+
+
+@jwt_required()
+def publish_listing(listing_id):
+    """Activate a seller's draft: validate, create inventory, go live."""
+    user = get_current_user()
+    listing = listing_service.publish_listing(user, listing_id)
+    if listing.state == "ACTIVE":
+        from app.models.marketplace import Inventory
+
+        batch_ref = f"listing-{listing.id[:8]}"
+        has = Inventory.query.filter_by(owner_id=user.id, batch_ref=batch_ref).first()
+        if has is None:
+            inventory_service.create_inventory(
+                owner_id=user.id,
+                product_id=listing.product_id,
+                quantity_value=listing.quantity_value,
+                unit_code=listing.unit_code,
+                farm_id=listing.farm_id,
+                batch_ref=batch_ref,
+            )
     db.session.commit()
 
     from extensions import realtime
 
     realtime.emit("listing.created", {"listing_id": listing.id})
-    return {"listing": listing_json(listing)}, 201
+    return {"listing": listing_json(listing)}
+
+
+def list_units():
+    rows = UnitOfMeasure.query.order_by(UnitOfMeasure.code).all()
+    return {"units": [
+        {"code": u.code, "label": u.label, "dimension": u.dimension}
+        for u in rows
+    ]}
 
 
 @jwt_required()
@@ -263,15 +319,39 @@ def listing_price_advisor(listing_id=None):
 
 
 class UpdateListingSchema(ma.Schema):
+    # Live listings accept a small presentation/availability subset; drafts may
+    # be edited across every creation field until published.
+    product_id = ma.fields.String()
     title = ma.fields.String()
     description = ma.fields.String()
     variety = ma.fields.String()
+    listing_type = ma.fields.String(
+        validate=ma.validate.OneOf(["FIXED_PRICE", "NEGOTIABLE", "AUCTION",
+                                    "FORWARD_CONTRACT", "GROUP_SALE"]))
+    quantity_value = ma.fields.Float()
+    available_quantity = ma.fields.Float()
+    unit_code = ma.fields.String()
+    expected_harvest_date = ma.fields.Date()
+    available_from = ma.fields.Date()
     quality_grade = ma.fields.String(missing="", allow_none=True)
+    production_method = ma.fields.String()
     certification = ma.fields.String(missing="", allow_none=True)
-    delivery_options = ma.fields.List(ma.fields.String())
+    attributes = ma.fields.Dict()
+    location_region = ma.fields.String()
+    location_district = ma.fields.String()
+    price_minor = ma.fields.Integer(allow_none=True)
+    currency_code = ma.fields.String()
+    price_type = ma.fields.String(
+        validate=ma.validate.OneOf(["PER_UNIT", "TOTAL", "NEGOTIABLE"]))
     negotiable = ma.fields.Boolean()
     minimum_order_value = ma.fields.Float(allow_none=True)
     maximum_order_value = ma.fields.Float(allow_none=True)
+    delivery_options = ma.fields.List(ma.fields.String())
+    farm_id = ma.fields.String()
+    auction_start_at = ma.fields.DateTime()
+    auction_end_at = ma.fields.DateTime()
+    reserve_price_minor = ma.fields.Integer(allow_none=True)
+    min_bid_increment_minor = ma.fields.Integer()
     state = ma.fields.String(validate=ma.validate.OneOf(["ACTIVE", "PAUSED", "CLOSED"]))
 
 

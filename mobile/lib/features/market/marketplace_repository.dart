@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/network/api_client.dart';
@@ -34,6 +35,15 @@ class MarketplaceRepository {
     return (res['categories'] as List? ?? const [])
         .whereType<Map<String, dynamic>>()
         .map(Category.fromJson)
+        .toList();
+  }
+
+  /// The backend-managed unit catalogue (kg, t, piece, day, ha, ...).
+  Future<List<UnitOption>> units() async {
+    final res = await _api.getJson('/units');
+    return (res['units'] as List? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(UnitOption.fromJson)
         .toList();
   }
 
@@ -125,8 +135,11 @@ class MarketplaceRepository {
 
   Future<(Listing, List<ListingMedia>)> listing(String listingId) async {
     final res = await _api.getJson('/listings/$listingId');
-    final l = Listing.fromJson(res['listing'] as Map<String, dynamic>);
-    final media = (res['media'] as List? ?? const [])
+    final listingJson = res['listing'] as Map<String, dynamic>;
+    final l = Listing.fromJson(listingJson);
+    // The detail endpoint nests media inside the listing payload.
+    final media = ((listingJson['media'] as List?) ??
+            (res['media'] as List?) ?? const [])
         .whereType<Map<String, dynamic>>()
         .map(ListingMedia.fromJson)
         .toList();
@@ -160,6 +173,45 @@ class MarketplaceRepository {
   Future<Listing> createListing(Map<String, dynamic> payload) async {
     final res = await _api.postJson('/listings', payload);
     return Listing.fromJson(res['listing'] as Map<String, dynamic>);
+  }
+
+  /// Transitions a seller's DRAFT listing to ACTIVE (creates real inventory).
+  Future<Listing> publishListing(String listingId) async {
+    final res = await _api.postJson('/listings/$listingId/publish', {});
+    return Listing.fromJson(res['listing'] as Map<String, dynamic>);
+  }
+
+  /// Attaches already-uploaded media to one of the seller's listings.
+  Future<void> attachListingMedia(
+      String listingId, List<Map<String, dynamic>> media) async {
+    await _api.postJson('/listings/$listingId/media', {'media': media});
+  }
+
+  /// Uploads a picked image to the platform and returns its storage key.
+  /// Reports per-file progress so the wizard can show upload state per photo.
+  Future<String> uploadListingImage(
+    String filePath, {
+    void Function(double fraction)? onProgress,
+  }) async {
+    final fileName = filePath.split('/').last;
+    final response = await _api.dio.post('/uploads/image', data: FormData.fromMap({
+      'file': await MultipartFile.fromFile(
+        filePath,
+        filename: fileName,
+        contentType: DioMediaType.parse(_guessImageContentType(fileName)),
+      ),
+    }), onSendProgress: (sent, total) {
+      if (total > 0 && onProgress != null) onProgress(sent / total);
+    });
+    final data = response.data as Map<String, dynamic>;
+    return data['storage_key'] as String;
+  }
+
+  static String _guessImageContentType(String name) {
+    final lower = name.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    return 'image/jpeg';
   }
 
   Future<Listing> updateListing(String listingId, Map<String, dynamic> patch) async {
