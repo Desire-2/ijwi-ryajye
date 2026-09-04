@@ -39,6 +39,18 @@ def farmer_card(user, profile=None):
     }
 
 
+def _attrs(raw):
+    import json
+
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
 def listing_json(listing, seller=None):
     product = listing.product
     return {
@@ -47,7 +59,10 @@ def listing_json(listing, seller=None):
         "listing_type": listing.listing_type,
         "state": listing.state,
         "product": {"id": product.id, "name": product.name, "slug": product.slug, "emoji": product.emoji},
+        "description": listing.description or "",
         "variety": listing.variety,
+        "attributes": _attrs(listing.attributes_json),
+        "available_from": str(listing.available_from) if listing.available_from else None,
         "quantity_value": float(listing.quantity_value),
         "available_quantity": float(listing.available_quantity),
         "sold_quantity": float(listing.sold_quantity or 0),

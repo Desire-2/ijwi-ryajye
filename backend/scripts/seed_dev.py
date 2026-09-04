@@ -50,10 +50,74 @@ def seed():
         livestock_products[slug] = product(name, slug, emoji,
                                            ProductCategory.query.filter_by(slug="livestock").first())
 
-    for code, label in [("kg", "Kilogram"), ("g", "Gram"), ("t", "Metric tonne"), ("L", "Litre"),
-                        ("piece", "Piece"), ("crate", "Crate"), ("bag", "Bag (50kg)")]:
+    def category(name, slug, icon):
+        c = ProductCategory.query.filter_by(slug=slug).first()
+        if c is None:
+            c = ProductCategory(name=name, slug=slug, icon=icon)
+            db.session.add(c)
+            db.session.flush()
+        return c
+
+    # The wider agricultural economy: animal products, processed goods,
+    # equipment, rentals, services, transport and storage each live as a real
+    # catalog category so the universal listing engine serves every offering.
+    for name, slug, icon, rows in [
+        ("Animal Products", "animal-products", "🥛", [
+            ("Fresh Milk", "fresh-milk", "🥛", "L"),
+            ("Eggs", "eggs", "🥚", "crate"),
+            ("Honey", "honey", "🍯", "kg"),
+        ]),
+        ("Processed Products", "processed-products", "📦", [
+            ("Cassava Flour", "cassava-flour", "🍞", "bag"),
+            ("Maize Flour", "maize-flour", "🌽", "bag"),
+        ]),
+        ("Farm Equipment", "farm-equipment", "🚜", [
+            ("Tractor", "tractor", "🚜", "piece"),
+            ("Water Pump", "water-pump", "💧", "piece"),
+            ("Knapsack Sprayer", "knapsack-sprayer", "🌿", "piece"),
+        ]),
+        ("Rentals & Hired Tools", "rentals", "🔧", [
+            ("Tractor Hire", "tractor-hire", "🚜", "day"),
+            ("Water Pump Hire", "water-pump-hire", "💧", "day"),
+        ]),
+        ("Farm Services", "farm-services", "🧑‍🌾", [
+            ("Ploughing Service", "ploughing-service", "🧑‍🌾", "ha"),
+            ("Spraying Service", "spraying-service", "🌿", "ha"),
+        ]),
+        ("Logistics & Transport", "logistics-transport", "🚚", [
+            ("Farm Transport", "farm-transport", "🚚", "trip"),
+        ]),
+        ("Storage & Facilities", "storage-facilities", "🏠", [
+            ("Cold Storage Space", "cold-storage-space", "🧊", "day"),
+        ]),
+    ]:
+        cat = category(name, slug, icon)
+        for pname, pslug, emoji, unit in rows:
+            p = Product.query.filter_by(slug=pslug).first()
+            if p is None:
+                db.session.add(Product(name=pname, slug=pslug, category_id=cat.id,
+                                       emoji=emoji, default_unit=unit))
+
+    # Seeds & Inputs gains a few stocked items.
+    seeds_cat = ProductCategory.query.filter_by(slug="seeds-inputs").first()
+    if seeds_cat is not None:
+        for pname, pslug, emoji, unit in [
+            ("Maize Seeds", "maize-seeds", "🌽", "kg"),
+            ("Fertilizer NPK", "fertilizer-npk", "🧪", "bag"),
+        ]:
+            if Product.query.filter_by(slug=pslug).first() is None:
+                db.session.add(Product(name=pname, slug=pslug, category_id=seeds_cat.id,
+                                       emoji=emoji, default_unit=unit))
+
+    for code, label, dimension in [
+        ("kg", "Kilogram", "mass"), ("g", "Gram", "mass"), ("t", "Metric tonne", "mass"),
+        ("L", "Litre", "volume"), ("piece", "Piece", "count"),
+        ("crate", "Crate", "count"), ("bag", "Bag (50kg)", "count"),
+        ("day", "Day", "time"), ("hour", "Hour", "time"), ("week", "Week", "time"),
+        ("ha", "Hectare", "area"), ("trip", "Trip", "service"),
+    ]:
         if UnitOfMeasure.query.filter_by(code=code).first() is None:
-            db.session.add(UnitOfMeasure(code=code, label=label))
+            db.session.add(UnitOfMeasure(code=code, label=label, dimension=dimension))
 
     from app.services.fee_service import ensure_default_fees
 

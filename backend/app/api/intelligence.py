@@ -77,7 +77,10 @@ def list_products_catalog():
         cat = p.category
         return {"id": p.id, "name": p.name, "slug": p.slug,
                 "emoji": (p.emoji or (cat.icon if cat else "") or "🌾"),
-                "category": {"id": cat.id, "name": cat.name} if cat else None}
+                "default_unit": p.default_unit,
+                "category": ({"id": cat.id, "name": cat.name,
+                               "slug": cat.slug, "icon": cat.icon}
+                              if cat else None)}
 
     return paginate_response(pg, product_json)
 

@@ -34,12 +34,32 @@ def _seed_essentials(app):
         from app.services.fee_service import ensure_default_fees
 
         if Product.query.count() == 0:
-            crops = ProductCategory(name="Crops", slug="crops", icon="🌾")
-            _db.session.add(crops)
-            _db.session.flush()
-            for name, slug in [("Maize", "maize"), ("Beans", "beans"), ("Rice", "rice"),
-                               ("Irish Potatoes", "irish-potatoes"), ("Bananas", "bananas")]:
-                _db.session.add(Product(name=name, slug=slug, category_id=crops.id))
+            def _cat(name, slug, icon, products):
+                cat = ProductCategory(name=name, slug=slug, icon=icon)
+                _db.session.add(cat)
+                _db.session.flush()
+                for pname, pslug, unit in products:
+                    _db.session.add(Product(name=pname, slug=pslug, category_id=cat.id,
+                                            default_unit=unit))
+
+            _cat("Crops", "crops", "🌾", [
+                ("Maize", "maize", "kg"), ("Beans", "beans", "kg"), ("Rice", "rice", "kg"),
+                ("Irish Potatoes", "irish-potatoes", "kg"), ("Bananas", "bananas", "kg")])
+            _cat("Livestock", "livestock", "🐄", [("Cattle", "cattle", "piece")])
+            _cat("Farm Equipment", "farm-equipment", "🚜", [("Tractor", "tractor", "piece")])
+            _cat("Farm Services", "farm-services", "🧑‍🌾",
+                 [("Ploughing Service", "ploughing-service", "ha")])
+            _cat("Rentals & Hired Tools", "rentals", "🔧",
+                 [("Tractor Hire", "tractor-hire", "day")])
+
+            from app.models.catalog import UnitOfMeasure
+
+            for code, label in [("kg", "Kilogram"), ("g", "Gram"), ("t", "Metric tonne"),
+                                ("L", "Litre"), ("piece", "Piece"), ("crate", "Crate"),
+                                ("bag", "Bag (50kg)"), ("day", "Day"), ("ha", "Hectare"),
+                                ("trip", "Trip")]:
+                if UnitOfMeasure.query.filter_by(code=code).first() is None:
+                    _db.session.add(UnitOfMeasure(code=code, label=label))
             ensure_default_fees()
             from app.models.identity import User
 

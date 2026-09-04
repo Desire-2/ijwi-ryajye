@@ -104,6 +104,10 @@ class Listing(SoftDeleteModel):
     quality_grade = db.Column(db.String(20), default="UNGRADED")
     production_method = db.Column(db.String(30))
     certification = db.Column(db.String(255), default="")
+    # Flexible per-category attributes (JSON object) so one listing engine can
+    # carry livestock, equipment, rental, service and produce specifics without
+    # a column per agricultural domain.
+    attributes_json = db.Column(db.Text)
     location_region = db.Column(db.String(120))
     location_district = db.Column(db.String(120))
 
