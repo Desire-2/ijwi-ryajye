@@ -264,6 +264,14 @@ class MarketplaceRepository {
     return Listing.fromJson(res['listing'] as Map<String, dynamic>);
   }
 
+  /// Ijwi AI extracts a structured listing draft from a seller's
+  /// plain-language description. Requires the backend AI provider to be
+  /// configured (503 otherwise).
+  Future<Map<String, dynamic>> aiListingDraft(String text) async {
+    final res = await _api.postJson('/ai/extract-listing', {'text': text});
+    return (res['draft'] as Map<String, dynamic>?) ?? const {};
+  }
+
   /// Attaches already-uploaded media to one of the seller's listings.
   Future<void> attachListingMedia(
       String listingId, List<Map<String, dynamic>> media) async {

@@ -11,6 +11,7 @@ import '../../core/theme/design_system.dart';
 import '../../core/utils/money.dart';
 import '../market/marketplace_models.dart';
 import '../market/marketplace_repository.dart';
+import 'ai_listing_draft_sheet.dart';
 import 'listing_share_sheet.dart';
 import 'listing_wizard_engine.dart';
 
@@ -417,6 +418,64 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     });
   }
 
+  // ----------------------------------------------------- AI draft assist
+
+  Future<void> _openAiAssistant() async {
+    final draft = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const AiListingDraftSheet(),
+    );
+    if (draft == null || !mounted) return;
+    _applyAiDraft(draft);
+  }
+
+  /// Fills wizard fields from the AI draft. The user reviews and confirms
+  /// every field on the following steps — nothing is published automatically.
+  void _applyAiDraft(Map<String, dynamic> d) {
+    final title = d['title'] as String?;
+    final guess = d['product_guess'] as String?;
+    final qty = (d['quantity_value'] as num?)?.toDouble() ?? 0;
+    final unit = d['unit_code'] as String?;
+    final priceMinor = (d['price_hint_minor'] as num?)?.toInt();
+    ProductSummary? match;
+    if (guess != null && guess.trim().isNotEmpty) {
+      final g = guess.toLowerCase().trim();
+      for (final p in _products) {
+        final name = p.name.toLowerCase();
+        if (name == g ||
+            (g.length >= 3 && (name.contains(g) || g.contains(name)))) {
+          match = p;
+          break;
+        }
+      }
+    }
+    final catSlug = match?.categorySlug;
+    final unitOk = unit != null && _units.any((u) => u.code == unit);
+    final fallbackUnit = unitOk ? unit : match?.defaultUnit;
+    setState(() {
+      _product = match;
+      if (catSlug != null) {
+        _selectedCategorySlug = catSlug;
+        _category = _categories?.where((c) => c.slug == catSlug).firstOrNull;
+      }
+      if (fallbackUnit != null) _unitCode = fallbackUnit;
+      if (title != null && title.trim().isNotEmpty) {
+        _title.text = title.trim();
+      }
+      if (qty > 0) _qty.text = _trimNum(qty);
+      if (priceMinor != null && priceMinor > 0 && _mode != 'AUCTION') {
+        _price.text = _trimMoney(priceMinor);
+      }
+      if (match != null && _step == 0) _step = 1;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content:
+          Text('✨ AI draft ready — review every field before publishing.'),
+    ));
+  }
+
   // ------------------------------------------------------------- computed
 
   bool get _isResume => _listingId != null;
@@ -663,6 +722,13 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             TextButton(
               onPressed: _busy ? null : _saveDraft,
               child: const Text('Save draft'),
+            ),
+          if (_step <= 1)
+            IconButton(
+              tooltip:
+                  'Describe it in your own words — AI fills the details',
+              icon: const Icon(Icons.auto_awesome),
+              onPressed: _busy ? null : _openAiAssistant,
             ),
         ],
       ),
