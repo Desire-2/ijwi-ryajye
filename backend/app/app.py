@@ -29,6 +29,8 @@ def create_app(config_name=None):
     db.init_app(app)
     migrate.init_app(app, db, directory=os.path.join(os.path.dirname(__file__), "..", "migrations"))
 
+    import app.models  # noqa: F401 – ensure all models are registered before create_all
+
     with app.app_context():
         db.create_all()
 

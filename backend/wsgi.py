@@ -1,8 +1,11 @@
+import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
-from app.app import create_wsgi_app
+from app.app import create_wsgi_app  # noqa: E402
 
 application = create_wsgi_app()
 app = application

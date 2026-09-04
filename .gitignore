@@ -10,6 +10,8 @@ instance/
 # Environment & secrets
 .env
 .env.local
+backend/.env
+backend/.env.local
 *.pem
 *.key
 
