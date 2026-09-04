@@ -330,8 +330,25 @@ Flask API (backend) / SQLite cache
   - **Copy text / Share outside**: shareable plain text plus the system share sheet
     (WhatsApp, email…). Each action confirms with a snackbar and reports failures inline.
 
+### Offline listing drafts (spec §59/§95–97/§128)
+- The category/product/unit catalogue is now cached locally (write-through on every
+  successful fetch) so the Create Listing wizard can **start while offline** — it boots
+  from the cache with an amber “You're offline” banner instead of failing.
+- **Save draft while offline** persists the whole wizard state on-device (LocalDb
+  `listing_drafts` collection): product, title/description, quantity/unit, price or
+  auction fields, per-kind attributes, location, delivery, and media. Photos whose
+  upload hits an offline error are kept queued (“Saved on this device — uploads when
+  online”) rather than marked failed, and upload automatically on the next online
+  save/publish.
+- **Resume & sync later**: My Listings shows a “Drafts on this device” section (works
+  even when the server is unreachable) with Continue — which reopens the wizard
+  prefilled from the local capture — and Delete. Once back online, saving or
+  publishing goes through the normal real draft lifecycle (draft → publish), and the
+  device mirror is dropped the moment the server owns the draft. Publishing while
+  offline explains that a connection is required and keeps the draft safe.
+
 ## 7. Traceability of spec coverage
 
 - §5 API mapping → §4, §8–16 home/search/filters/cards, §17–21 seller/trust/quality, §23–24 availability/units, §28–29 checkout (offer→order), §30–35 negotiation/auctions, §36–40 RFQ/matching/opportunities, §50–52 favorites/saved searches/price alerts, §55–58 chat/orders/timeline, §61–63 payments/fees, §80–83 reviews/reputation/trust, §66/§128–130 seller dashboard/analytics/insights, §81–83 reviews/reputation/trust badges, §84–87 realtime events/notifications/inventory, §88–94 search performance/discovery/offline, §93–94 low-bandwidth/offline browsing, §97–101 listing forms, §136 deep links, §138–139 localization, §140–150 visual design/states, §152–157 pagination/caching/state, §160 backend authority, §170 API error mapping, §226–229 no fakes/duplicates, §231 cleanup.
 
-Listing-creation spec (one universal engine): §2–3 kinds/examples, §6 API contract audit, §7–10 universal attributes + entry points, §14–15 attribute engine + universal fields, §17–25 quantity/units/availability, §27–29 quality/cert, §34–39 media (upload/order/retry), §44–45 sale method/auction fields, §46–52 per-kind forms, §55–56 inventory link, §58–63 drafts/preview/publish, §66–67 share-after-publish (success screen → Status / community / chat / outside, see “Share after publish” above), §83–86 form state/autosave/unsaved, §100–107 security/integrity/media storage/attribute storage, §115–118 success screen/create-another, §120–122 matching after publish (backend matching exists; surfaced via opportunities screen), §123–125 community/status/direct-buyer sharing (success-screen share sheet), §128 abandonment reminder (follow-up), §130–134 validation/help/units/location/dates, §135–141 icons/labels/sticky bar/keyboard/image UX, §143–146 backend authority + idempotency, §157–172 tests/docs (draft lifecycle, invalid data, ownership, media retry, publish-without-network).
+Listing-creation spec (one universal engine): §2–3 kinds/examples, §6 API contract audit, §7–10 universal attributes + entry points, §14–15 attribute engine + universal fields, §17–25 quantity/units/availability, §27–29 quality/cert, §34–39 media (upload/order/retry), §44–45 sale method/auction fields, §46–52 per-kind forms, §55–56 inventory link, §58–63 drafts/preview/publish, §59 offline drafts (device-local drafts + resume + publish-after-reconnect, see “Offline listing drafts” above), §66–67 share-after-publish (success screen → Status / community / chat / outside, see “Share after publish” above), §83–86 form state/autosave/unsaved, §95–97 offline listing flow/sync (start offline from cached catalogue, media queued, no fake “Published”), §100–107 security/integrity/media storage/attribute storage, §115–118 success screen/create-another, §120–122 matching after publish (backend matching exists; surfaced via opportunities screen), §123–125 community/status/direct-buyer sharing (success-screen share sheet), §128 abandonment reminder (draft continuation available from My Listings), §130–134 validation/help/units/location/dates, §135–141 icons/labels/sticky bar/keyboard/image UX, §143–146 backend authority + idempotency, §153 offline data cache (catalogue + drafts cached; server stays authoritative for finance), §157–172 tests/docs (draft lifecycle, invalid data, ownership, media retry, publish-without-network).

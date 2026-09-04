@@ -32,19 +32,21 @@ class MarketplaceRepository {
 
   Future<List<Category>> categories() async {
     final res = await _api.getJson('/categories');
-    return (res['categories'] as List? ?? const [])
+    final rows = (res['categories'] as List? ?? const [])
         .whereType<Map<String, dynamic>>()
-        .map(Category.fromJson)
         .toList();
+    _cacheRows('categories', rows, (j) => j['id']);
+    return rows.map(Category.fromJson).toList();
   }
 
   /// The backend-managed unit catalogue (kg, t, piece, day, ha, ...).
   Future<List<UnitOption>> units() async {
     final res = await _api.getJson('/units');
-    return (res['units'] as List? ?? const [])
+    final rows = (res['units'] as List? ?? const [])
         .whereType<Map<String, dynamic>>()
-        .map(UnitOption.fromJson)
         .toList();
+    _cacheRows('units', rows, (j) => j['code']);
+    return rows.map(UnitOption.fromJson).toList();
   }
 
   Future<List<ProductSummary>> products({String? category, String? q}) async {
@@ -53,10 +55,91 @@ class MarketplaceRepository {
       if (category != null && category.isNotEmpty) 'category': category,
       if (q != null && q.isNotEmpty) 'q': q,
     });
-    return (res['items'] as List? ?? const [])
+    final rows = (res['items'] as List? ?? const [])
         .whereType<Map<String, dynamic>>()
+        .toList();
+    _cacheRows('products', rows, (j) => j['id']);
+    return rows.map(ProductSummary.fromJson).toList();
+  }
+
+  /// Best-effort write-through of raw API rows into a cache collection so the
+  /// Create Listing wizard can still start while offline. Never blocks.
+  void _cacheRows(String collection, List<Map<String, dynamic>> rows,
+      String? Function(Map<String, dynamic>) idOf) {
+    final db = _localDb;
+    if (db == null || rows.isEmpty) return;
+    Future(() async {
+      try {
+        final local = await db();
+        for (final row in rows) {
+          final id = idOf(row);
+          if (id != null && id.isNotEmpty) {
+            await local.upsertCache(collection, id, row);
+          }
+        }
+      } catch (_) {
+        // cache is best-effort
+      }
+    });
+  }
+
+  // ---- offline catalog + local listing drafts ----
+
+  /// Cached copy of the last fetched categories (offline wizard start).
+  Future<List<Category>> cachedCategories({int limit = 100}) async {
+    return (await _readCachedRows('categories', limit: limit))
+        .map(Category.fromJson)
+        .toList();
+  }
+
+  Future<List<UnitOption>> cachedUnits({int limit = 100}) async {
+    return (await _readCachedRows('units', limit: limit))
+        .map(UnitOption.fromJson)
+        .toList();
+  }
+
+  Future<List<ProductSummary>> cachedProducts({int limit = 400}) async {
+    return (await _readCachedRows('products', limit: limit))
         .map(ProductSummary.fromJson)
         .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _readCachedRows(String collection,
+      {int limit = 200}) async {
+    final db = _localDb;
+    if (db == null) return const [];
+    try {
+      return await (await db()).readCollection(collection, limit: limit);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// A listing started offline (or a server draft mirrored locally) that has
+  /// not been published yet. State is the wizard's own capture format.
+  Future<void> saveLocalListingDraft(
+      String id, Map<String, dynamic> state) async {
+    final db = _localDb;
+    if (db == null) return;
+    try {
+      await (await db()).upsertCache('listing_drafts', id, state);
+    } catch (_) {
+      // best-effort local persistence
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> localListingDrafts() async {
+    return _readCachedRows('listing_drafts', limit: 50);
+  }
+
+  Future<void> deleteLocalListingDraft(String id) async {
+    final db = _localDb;
+    if (db == null) return;
+    try {
+      await (await db()).deleteEntity('listing_drafts', id);
+    } catch (_) {
+      // best-effort
+    }
   }
 
   Future<Paged<Listing>> listings({

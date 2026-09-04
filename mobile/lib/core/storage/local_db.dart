@@ -128,6 +128,13 @@ class LocalDb {
     return jsonDecode(rows.first['body'] as String) as Map<String, dynamic>;
   }
 
+  Future<void> deleteEntity(String collection, String entityId) async {
+    final db = await database;
+    await db.delete('cache',
+        where: 'collection = ? AND entity_id = ?',
+        whereArgs: [collection, entityId]);
+  }
+
   // ---- cursors ----
 
   Future<void> saveCursor(String collection, String cursor) async {

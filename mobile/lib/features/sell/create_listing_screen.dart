@@ -24,6 +24,10 @@ class _MediaItem {
   double progress = 0;
   bool uploading = false;
   bool failed = false;
+
+  /// Upload attempt hit an offline error — keep the local file and retry
+  /// when a connection is back (part of the offline draft flow).
+  bool offlinePending = false;
 }
 
 /// Universal "Create Listing" wizard — ONE listing engine for the whole
@@ -95,6 +99,10 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   List<String> _serverMediaKeys = const []; // media already attached server-side
   Listing? _published;
 
+  // ---- offline support ----
+  String? _localDraftId; // key of this draft's device-local mirror
+  bool _offlineCatalog = false; // wizard running from the cached catalog
+
   @override
   void initState() {
     super.initState();
@@ -121,6 +129,10 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
   Future<void> _bootstrap() async {
     final repo = ref.read(marketplaceRepositoryProvider);
+    var cats = <Category>[];
+    var units = <UnitOption>[];
+    var products = <ProductSummary>[];
+    var offline = false;
     try {
       final results = await Future.wait([
         repo.categories(),
@@ -128,26 +140,46 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         repo.products(),
         _loadUserRegion(),
       ]);
-      final cats = results[0] as List<Category>;
-      final units = results[1] as List<UnitOption>;
-      final products = results[2] as List<ProductSummary>;
-      if (!mounted) return;
-      setState(() {
-        _categories = cats;
-        _units = units;
-        _products = products;
-        _loading = false;
-      });
-      _pickUnitIfMissing(units);
-      if (widget.initialListingId != null) {
-        await _loadDraft(widget.initialListingId!, repo, products);
-      }
+      cats = results[0] as List<Category>;
+      units = results[1] as List<UnitOption>;
+      products = results[2] as List<ProductSummary>;
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = ApiClient.errorMessage(e);
-      });
+      // Offline (or a catalogue hiccup): fall back to the cached catalogue so
+      // a seller can still start a listing — photos stay on the device and
+      // publishing resumes when a connection is back.
+      try {
+        final cached = await Future.wait([
+          repo.cachedCategories(),
+          repo.cachedUnits(),
+          repo.cachedProducts(),
+        ]);
+        cats = cached[0] as List<Category>;
+        units = cached[1] as List<UnitOption>;
+        products = cached[2] as List<ProductSummary>;
+        offline = true;
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _error = ApiClient.isOfflineError(e)
+              ? "You're offline and no saved catalogue is available yet — "
+                  'connect once so the listing catalogue is saved for offline use.'
+              : ApiClient.errorMessage(e);
+        });
+        return;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _categories = cats;
+      _units = units;
+      _products = products;
+      _loading = false;
+      _offlineCatalog = offline;
+    });
+    _pickUnitIfMissing(units);
+    if (widget.initialListingId != null) {
+      await _loadDraft(widget.initialListingId!, repo, products);
     }
   }
 
@@ -176,8 +208,28 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     }
   }
 
+  /// Restores a draft that was started on this device while offline.
+  Future<Map<String, dynamic>?> _findLocalDraft(String id) async {
+    try {
+      final drafts =
+          await ref.read(marketplaceRepositoryProvider).localListingDrafts();
+      for (final d in drafts) {
+        if (d['local_id'] == id || d['server_listing_id'] == id) return d;
+      }
+    } catch (_) {
+      // best-effort
+    }
+    return null;
+  }
+
   Future<void> _loadDraft(String id, MarketplaceRepository repo,
       List<ProductSummary> products) async {
+    // Device-local drafts (started offline) restore without any network.
+    final local = await _findLocalDraft(id);
+    if (local != null) {
+      _restoreLocalDraft(local, products);
+      return;
+    }
     try {
       final (listing, media) = await repo.listing(id);
       if (!mounted) return;
@@ -235,6 +287,134 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       if (!mounted) return;
       setState(() => _error = ApiClient.errorMessage(e));
     }
+  }
+
+  /// Device-local mirror of the current wizard state (offline drafts).
+  Map<String, dynamic> _captureLocalState() => {
+        'local_id': _localDraftId,
+        'server_listing_id': _listingId,
+        'product_id': _product?.id,
+        'product_name': _product?.name,
+        'emoji': _product?.emoji,
+        'title': _title.text,
+        'description': _description.text,
+        'quantity_value': _qtyValue,
+        'unit_code': _unitCode,
+        'quality_grade': _quality,
+        'production_method': _productionMethod,
+        'certification': _certification,
+        'variety': _variety.text,
+        'min_order_value': double.tryParse(_minOrder.text.trim()),
+        'region': _region.text,
+        'district': _district.text,
+        'delivery_options': _delivery.toList(),
+        'negotiable': _negotiable,
+        'mode': _mode,
+        'price_minor': _priceMinor,
+        'reserve_minor':
+            (num.tryParse(_reserve.text.trim()) ?? 0) * 100,
+        'increment_minor':
+            ((num.tryParse(_increment.text.trim()) ?? 0) * 100).round(),
+        'attributes': _attrs,
+        'available_from': _availableFrom?.toIso8601String(),
+        'expected_harvest': _expectedHarvest?.toIso8601String(),
+        'auction_end': _auctionEnd?.toIso8601String(),
+        'media': [
+          for (final m in _pendingMedia)
+            if (m.storageKey != null || m.path.isNotEmpty)
+              {'path': m.path, 'storage_key': m.storageKey},
+        ],
+        'step': _step,
+        'updated_at': DateTime.now().toIso8601String(),
+      }..removeWhere((k, v) => v == null);
+
+  Future<void> _persistLocalDraft() async {
+    _localDraftId ??= 'local-${DateTime.now().microsecondsSinceEpoch}';
+    await ref
+        .read(marketplaceRepositoryProvider)
+        .saveLocalListingDraft(_localDraftId!, _captureLocalState());
+  }
+
+  /// Fills every wizard field from a device-local draft capture.
+  void _restoreLocalDraft(
+      Map<String, dynamic> d, List<ProductSummary> products) {
+    ProductSummary? match;
+    final pid = d['product_id'] as String?;
+    for (final p in products) {
+      if (p.id == pid) {
+        match = p;
+        break;
+      }
+    }
+    final catSlug = match?.categorySlug;
+    final step = (d['step'] as num?)?.toInt();
+    setState(() {
+      _localDraftId = d['local_id'] as String?;
+      _listingId = d['server_listing_id'] as String?;
+      if (match != null) {
+        _product = match;
+        _category = _categories?.where((c) => c.slug == catSlug).firstOrNull;
+        _selectedCategorySlug = catSlug;
+      }
+      _title.text = d['title'] as String? ?? '';
+      _description.text = d['description'] as String? ?? '';
+      final qty = (d['quantity_value'] as num?)?.toDouble() ?? 0;
+      _qty.text = qty > 0 ? _trimNum(qty) : '';
+      _unitCode = d['unit_code'] as String? ?? 'kg';
+      _quality = d['quality_grade'] as String? ?? 'UNGRADED';
+      _productionMethod = d['production_method'] as String?;
+      _certification = d['certification'] as String?;
+      _variety.text = d['variety'] as String? ?? '';
+      _region.text = d['region'] as String? ?? '';
+      _district.text = d['district'] as String? ?? '';
+      _delivery
+        ..clear()
+        ..addAll((d['delivery_options'] as List? ?? const [])
+            .whereType<String>());
+      if (_delivery.isEmpty) {
+        _delivery.addAll(const ['PICKUP', 'NEGOTIABLE']);
+      }
+      _negotiable = (d['negotiable'] as bool?) ?? false;
+      _mode = d['mode'] as String? ?? 'FIXED_PRICE';
+      final pm = (d['price_minor'] as num?)?.toInt();
+      if (pm != null && pm > 0) {
+        if (_mode == 'AUCTION') {
+          _reserve.text = _trimMoney(pm);
+        } else {
+          _price.text = _trimMoney(pm);
+        }
+      }
+      final inc = (d['increment_minor'] as num?)?.toInt();
+      if (inc != null && inc > 0) _increment.text = _trimMoney(inc);
+      final mo = (d['min_order_value'] as num?)?.toDouble();
+      if (mo != null && mo > 0) _minOrder.text = _trimNum(mo);
+      _attrs
+        ..clear()
+        ..addAll(
+            (d['attributes'] as Map<String, dynamic>?) ?? const {});
+      _availableFrom =
+          DateTime.tryParse(d['available_from'] as String? ?? '');
+      _expectedHarvest =
+          DateTime.tryParse(d['expected_harvest'] as String? ?? '');
+      _auctionEnd = DateTime.tryParse(d['auction_end'] as String? ?? '');
+      _serverMediaKeys = [
+        for (final m in (d['media'] as List? ?? const []))
+          if (m is Map<String, dynamic> && m['storage_key'] is String)
+            m['storage_key'] as String,
+      ];
+      _pendingMedia
+        ..clear()
+        ..addAll([
+          for (final m in (d['media'] as List? ?? const []))
+            if (m is Map<String, dynamic> &&
+                (m['path'] as String?)?.isNotEmpty == true)
+              _MediaItem(m['path'] as String)
+                ..storageKey = m['storage_key'] as String?,
+        ]);
+      _step = step == null
+          ? (match == null ? 0 : 1)
+          : step.clamp(0, _steps.length - 1);
+    });
   }
 
   // ------------------------------------------------------------- computed
@@ -295,6 +475,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     });
     final repo = ref.read(marketplaceRepositoryProvider);
     try {
+      // Photos chosen while offline upload now that we have a connection;
+      // uploads that still fail with an offline error stay queued locally.
+      await _uploadPendingMedia();
       final payload = _buildPayload(state: 'DRAFT');
       if (_listingId == null) {
         // Fresh draft — created with any media picked so far. Those keys are
@@ -312,6 +495,12 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         await repo.updateListing(_listingId!, _buildPatchPayload());
       }
       await _attachPendingMedia(repo);
+      // The server now owns this draft — drop any device-local mirror.
+      final localId = _localDraftId;
+      if (localId != null) {
+        await repo.deleteLocalListingDraft(localId);
+        _localDraftId = null;
+      }
       if (publish) {
         if (mounted) setState(() => _busy = true);
         final live = await repo.publishListing(_listingId!);
@@ -329,9 +518,35 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = ApiClient.errorMessage(e));
+      if (ApiClient.isOfflineError(e)) {
+        // Nothing reached the server — keep everything on this device.
+        await _persistLocalDraft();
+        if (!mounted) return;
+        if (publish) {
+          setState(() => _error =
+              "You're offline — publishing needs a connection. "
+              'Your draft is safe on this device; publish when you\'re back online.');
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Offline — draft saved on this device. Finish it when you\'re back online.'),
+          ));
+        }
+      } else {
+        setState(() => _error = ApiClient.errorMessage(e));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Uploads media files that were picked offline (or whose earlier upload
+  /// failed purely because there was no connection).
+  Future<void> _uploadPendingMedia() async {
+    for (final item in _pendingMedia) {
+      if (item.storageKey == null && !item.failed && !item.uploading) {
+        await _upload(item);
+      }
     }
   }
 
@@ -480,6 +695,21 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
   Widget _wizardBody() {
     return Column(children: [
+      if (_offlineCatalog)
+        const ColoredBox(
+          color: Color(0xFFFBEED2),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Text(
+              "You're offline — categories come from a saved copy. "
+              'Your draft stays on this device until you publish online.',
+              style: TextStyle(
+                  fontSize: 12.5,
+                  color: Color(0xFF9A6B00),
+                  fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
       _progressBar(),
       Expanded(child: _buildStep()),
       if (_error != null)
@@ -1266,6 +1496,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     setState(() {
       item.uploading = true;
       item.failed = false;
+      item.offlinePending = false;
       item.progress = 0;
     });
     try {
@@ -1278,13 +1509,19 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       setState(() {
         item.storageKey = key;
         item.uploading = false;
+        item.offlinePending = false;
         item.progress = 1;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         item.uploading = false;
-        item.failed = true;
+        if (ApiClient.isOfflineError(e)) {
+          // No connection: keep the file queued for a later online attempt.
+          item.offlinePending = true;
+        } else {
+          item.failed = true;
+        }
       });
     }
   }
@@ -1326,6 +1563,10 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                     Text('Upload failed — tap retry',
                         style: const TextStyle(
                             fontSize: 12, color: IjwiColors.red))
+                  else if (item.offlinePending)
+                    Text('Saved on this device — uploads when online',
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFF9A6B00)))
                   else
                     Text('Ready',
                         style: const TextStyle(
