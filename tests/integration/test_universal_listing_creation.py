@@ -28,7 +28,7 @@ def _draft_listing(client, farmer, slug="cattle", extra=None):
     return r.get_json()["listing"]
 
 
-def test_draft_lifecycle_edit_publish_and_inventory(client, farmer):
+def test_draft_lifecycle_edit_publish_and_inventory(client, farmer, app):
     headers = auth_headers(farmer)
     listing = _draft_listing(client, farmer, extra={"attributes": {"breed": "Holstein"}})
     assert listing["state"] == "DRAFT"
@@ -84,7 +84,8 @@ def test_draft_lifecycle_edit_publish_and_inventory(client, farmer):
     from extensions import db
     from app.models.marketplace import Inventory
 
-    inv = Inventory.query.filter_by(owner_id=farmer["id"]).all()
+    with app.app_context():
+        inv = Inventory.query.filter_by(owner_id=farmer["id"]).all()
     assert len(inv) == 1 and float(inv[0].quantity_total) == 2.0
     assert inv[0].batch_ref == f"listing-{listing['id'][:8]}"
 

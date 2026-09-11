@@ -21,7 +21,7 @@ def _live_listing(client, farmer, qty=100, price=50000):
     return r.get_json()["listing"]
 
 
-def test_live_price_and_quantity_edits(client, farmer):
+def test_live_price_and_quantity_edits(client, farmer, app):
     headers = auth_headers(farmer)
     listing = _live_listing(client, farmer, qty=100)
 
@@ -45,7 +45,8 @@ def test_live_price_and_quantity_edits(client, farmer):
     from extensions import db
     from app.models.marketplace import Inventory
 
-    inv = Inventory.query.filter_by(owner_id=farmer["id"]).first()
+    with app.app_context():
+        inv = Inventory.query.filter_by(owner_id=farmer["id"]).first()
     assert float(inv.quantity_total) == 150.0
 
     # Further top-ups above the original quantity grow the capacity (restock).
@@ -70,7 +71,8 @@ def test_live_price_and_quantity_edits(client, farmer):
     assert r.get_json()["listing"]["state"] == "ACTIVE"
     assert r.get_json()["listing"]["available_quantity"] == 40
 
-    inv = Inventory.query.filter_by(owner_id=farmer["id"]).first()
+    with app.app_context():
+        inv = Inventory.query.filter_by(owner_id=farmer["id"]).first()
     assert float(inv.quantity_total) == 40.0
     assert inv.state == "AVAILABLE"
 

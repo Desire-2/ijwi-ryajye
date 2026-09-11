@@ -5,7 +5,7 @@ from flask_jwt_extended import jwt_required
 from extensions import db, limiter
 from app.api.helpers import pagination_args, parse_body, paginate_response, query_params
 from app.errors import not_found
-from app.models.catalog import Product
+from app.models.catalog import Product, ProductCategory
 from app.services import ai_service, market_service
 from app.services.security import get_current_user
 
@@ -70,8 +70,25 @@ def ingest_price():
 
 
 def list_products_catalog():
-    page, per_page = pagination_args(default_per_page=200)
-    pg = Product.query.order_by(Product.name.asc()).paginate(page=page, per_page=per_page, error_out=False)
+    page, per_page = pagination_args(default_per_page=200, max_per_page=500)
+    q = Product.query.filter(Product.deleted_at.is_(None))
+
+    # Filter by category slug (used by the Flutter listing wizard).
+    cat_slug = query_params().get("category")
+    if cat_slug:
+        cat = ProductCategory.query.filter_by(slug=cat_slug).first()
+        if cat:
+            q = q.filter(Product.category_id == cat.id)
+        else:
+            # Non-existent category: empty page.
+            return {"items": [], "pagination": {
+                "page": page, "per_page": per_page, "total": 0, "total_pages": 0}}
+
+    search = query_params().get("q")
+    if search:
+        q = q.filter(Product.name.ilike(f"%{search}%"))
+
+    pg = q.order_by(Product.name.asc()).paginate(page=page, per_page=per_page, error_out=False)
 
     def product_json(p):
         cat = p.category

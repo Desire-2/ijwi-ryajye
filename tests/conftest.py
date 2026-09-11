@@ -83,9 +83,10 @@ def app():
 @pytest.fixture(autouse=True)
 def clean_db(app):
     yield
-    _db.session.remove()
-    _truncate_all(_db.engine)
-    _seed_essentials(app)
+    with app.app_context():
+        _db.session.remove()
+        _truncate_all(_db.engine)
+        _seed_essentials(app)
 
 
 @pytest.fixture()

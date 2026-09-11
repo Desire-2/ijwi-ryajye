@@ -48,7 +48,13 @@ class CreateListingScreen extends ConsumerStatefulWidget {
 
 class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   static const _steps = [
-    'Offer', 'Details', 'Quantity', 'Pricing', 'Location', 'Photos', 'Review',
+    'Offer',
+    'Details',
+    'Quantity',
+    'Pricing',
+    'Location',
+    'Photos',
+    'Review',
   ];
 
   final _title = TextEditingController();
@@ -61,6 +67,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   final _variety = TextEditingController();
   final _region = TextEditingController();
   final _district = TextEditingController();
+  final _productQuery = TextEditingController();
 
   /// Per-kind dynamic attribute values (keyed by engine field id).
   final Map<String, dynamic> _attrs = {};
@@ -71,7 +78,6 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   List<Category>? _categories;
   List<ProductSummary> _products = const [];
   ProductSummary? _product;
-  Category? _category;
   List<UnitOption> _units = const [];
   String? _selectedCategorySlug;
 
@@ -97,12 +103,16 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
   // ---- lifecycle ----
   String? _listingId; // set once a draft exists server-side
-  List<String> _serverMediaKeys = const []; // media already attached server-side
+  List<String> _serverMediaKeys =
+      const []; // media already attached server-side
   Listing? _published;
 
   // ---- offline support ----
   String? _localDraftId; // key of this draft's device-local mirror
   bool _offlineCatalog = false; // wizard running from the cached catalog
+
+  // ---- offer step ----
+  bool _addingProductLock = false; // guards double-taps on the sheet launch
 
   @override
   void initState() {
@@ -123,6 +133,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     _variety.dispose();
     _region.dispose();
     _district.dispose();
+    _productQuery.dispose();
     super.dispose();
   }
 
@@ -186,9 +197,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
   Future<void> _loadUserRegion() async {
     try {
-      final res = await ref
-          .read(apiClientProvider)
-          .getJson('/users/me');
+      final res = await ref.read(apiClientProvider).getJson('/users/me');
       final u = res['user'] as Map<String, dynamic>? ?? const {};
       final region = u['region'] as String?;
       final district = u['district'] as String?;
@@ -247,9 +256,6 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         _listingId = id;
         if (match != null) {
           _product = match;
-          _category = _categories
-              ?.where((c) => c.slug == catSlug)
-              .firstOrNull;
           _selectedCategorySlug = catSlug;
         }
         _title.text = listing.title;
@@ -258,9 +264,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         _unitCode = listing.unitCode;
         _quality = listing.qualityGrade;
         _productionMethod = listing.productionMethod;
-        _certification = listing.certification.isEmpty
-            ? null
-            : listing.certification;
+        _certification =
+            listing.certification.isEmpty ? null : listing.certification;
         _region.text = listing.locationRegion ?? '';
         _district.text = listing.locationDistrict ?? '';
         _delivery
@@ -312,8 +317,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         'negotiable': _negotiable,
         'mode': _mode,
         'price_minor': _priceMinor,
-        'reserve_minor':
-            (num.tryParse(_reserve.text.trim()) ?? 0) * 100,
+        'reserve_minor': (num.tryParse(_reserve.text.trim()) ?? 0) * 100,
         'increment_minor':
             ((num.tryParse(_increment.text.trim()) ?? 0) * 100).round(),
         'attributes': _attrs,
@@ -354,7 +358,6 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       _listingId = d['server_listing_id'] as String?;
       if (match != null) {
         _product = match;
-        _category = _categories?.where((c) => c.slug == catSlug).firstOrNull;
         _selectedCategorySlug = catSlug;
       }
       _title.text = d['title'] as String? ?? '';
@@ -370,8 +373,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       _district.text = d['district'] as String? ?? '';
       _delivery
         ..clear()
-        ..addAll((d['delivery_options'] as List? ?? const [])
-            .whereType<String>());
+        ..addAll(
+            (d['delivery_options'] as List? ?? const []).whereType<String>());
       if (_delivery.isEmpty) {
         _delivery.addAll(const ['PICKUP', 'NEGOTIABLE']);
       }
@@ -391,10 +394,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       if (mo != null && mo > 0) _minOrder.text = _trimNum(mo);
       _attrs
         ..clear()
-        ..addAll(
-            (d['attributes'] as Map<String, dynamic>?) ?? const {});
-      _availableFrom =
-          DateTime.tryParse(d['available_from'] as String? ?? '');
+        ..addAll((d['attributes'] as Map<String, dynamic>?) ?? const {});
+      _availableFrom = DateTime.tryParse(d['available_from'] as String? ?? '');
       _expectedHarvest =
           DateTime.tryParse(d['expected_harvest'] as String? ?? '');
       _auctionEnd = DateTime.tryParse(d['auction_end'] as String? ?? '');
@@ -458,7 +459,6 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       _product = match;
       if (catSlug != null) {
         _selectedCategorySlug = catSlug;
-        _category = _categories?.where((c) => c.slug == catSlug).firstOrNull;
       }
       if (fallbackUnit != null) _unitCode = fallbackUnit;
       if (title != null && title.trim().isNotEmpty) {
@@ -471,8 +471,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       if (match != null && _step == 0) _step = 1;
     });
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content:
-          Text('✨ AI draft ready — review every field before publishing.'),
+      content: Text('✨ AI draft ready — review every field before publishing.'),
     ));
   }
 
@@ -501,7 +500,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   }
 
   bool get _auctionValid =>
-      _mode != 'AUCTION' || (_auctionEnd != null && _auctionEnd!.isAfter(DateTime.now()));
+      _mode != 'AUCTION' ||
+      (_auctionEnd != null && _auctionEnd!.isAfter(DateTime.now()));
 
   bool get _canSaveDraft => _hasProduct && _qtyValid && !_busy;
 
@@ -582,8 +582,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         await _persistLocalDraft();
         if (!mounted) return;
         if (publish) {
-          setState(() => _error =
-              "You're offline — publishing needs a connection. "
+          setState(() => _error = "You're offline — publishing needs a connection. "
               'Your draft is safe on this device; publish when you\'re back online.');
         } else {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -612,7 +611,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   /// Uploaded-but-unattached photos go to the server once a draft exists.
   Future<void> _attachPendingMedia(MarketplaceRepository repo) async {
     final keys = _pendingMedia
-        .where((m) => m.storageKey != null && !_serverMediaKeys.contains(m.storageKey))
+        .where((m) =>
+            m.storageKey != null && !_serverMediaKeys.contains(m.storageKey))
         .map((m) => {'storage_key': m.storageKey})
         .toList();
     if (keys.isEmpty || _listingId == null) return;
@@ -629,16 +629,17 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     final payload = <String, dynamic>{
       'state': state,
       'product_id': _product!.id,
-      'title': _title.text.trim().isNotEmpty
-          ? _title.text.trim()
-          : _defaultTitle(),
+      'title':
+          _title.text.trim().isNotEmpty ? _title.text.trim() : _defaultTitle(),
       if (_description.text.trim().isNotEmpty)
         'description': _description.text.trim(),
       'quantity_value': _qtyValue,
       'available_quantity': _qtyValue,
       'unit_code': _unitCode,
-      'location_region': _region.text.trim().isEmpty ? null : _region.text.trim(),
-      if (_district.text.trim().isNotEmpty) 'location_district': _district.text.trim(),
+      'location_region':
+          _region.text.trim().isEmpty ? null : _region.text.trim(),
+      if (_district.text.trim().isNotEmpty)
+        'location_district': _district.text.trim(),
       'delivery_options': _delivery.join(','),
       'negotiable': _negotiable,
       'listing_type': _mode,
@@ -683,7 +684,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         if (_auctionEnd != null)
           'auction_end_at': _auctionEnd!.toUtc().toIso8601String(),
         if (_reserve.text.trim().isNotEmpty)
-          'reserve_price_minor': (num.tryParse(_reserve.text.trim()) ?? 0) * 100,
+          'reserve_price_minor':
+              (num.tryParse(_reserve.text.trim()) ?? 0) * 100,
         'min_bid_increment_minor':
             ((num.tryParse(_increment.text.trim()) ?? 1) * 100).round(),
       };
@@ -725,8 +727,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             ),
           if (_step <= 1)
             IconButton(
-              tooltip:
-                  'Describe it in your own words — AI fills the details',
+              tooltip: 'Describe it in your own words — AI fills the details',
               icon: const Icon(Icons.auto_awesome),
               onPressed: _busy ? null : _openAiAssistant,
             ),
@@ -740,7 +741,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                   ? Center(
                       child: Padding(
                         padding: const EdgeInsets.all(24),
-                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        child:
+                            Column(mainAxisSize: MainAxisSize.min, children: [
                           Text(_error!, textAlign: TextAlign.center),
                           const SizedBox(height: 12),
                           FilledButton(
@@ -799,9 +801,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                 height: 5,
                 margin: const EdgeInsets.symmetric(horizontal: 2),
                 decoration: BoxDecoration(
-                  color: i <= _step
-                      ? IjwiColors.green
-                      : const Color(0xFFD7E2DA),
+                  color:
+                      i <= _step ? IjwiColors.green : const Color(0xFFD7E2DA),
                   borderRadius: BorderRadius.circular(3),
                 ),
               ),
@@ -876,14 +877,101 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
   // -------------------------------------------------------------- step: 0
 
+  /// Selects a category chip, clearing any chosen product that no longer
+  /// matches (and the downstream state that depended on it).
+  void _selectCategory(String? slug) {
+    setState(() {
+      final cat = slug == null
+          ? null
+          : _categories?.where((c) => c.slug == slug).firstOrNull;
+      final movedWhileProductChosen =
+          _product != null && cat != null && _product!.categorySlug != cat.slug;
+      if (movedWhileProductChosen) {
+        final autoTitle = _title.text.trim() == _product!.name.trim();
+        _product = null;
+        _attrs.clear();
+        _unitCode = profileFor(cat.slug).preferredUnits.firstOrNull ?? 'kg';
+        if (autoTitle) _title.clear();
+      }
+      _selectedCategorySlug = slug;
+      _error = null;
+    });
+  }
+
+  void _selectProduct(ProductSummary p, Category? cat) {
+    setState(() {
+      _product = p;
+      _unitCode = p.defaultUnit.isNotEmpty
+          ? p.defaultUnit
+          : (profileFor(cat?.slug).preferredUnits.firstOrNull ?? 'kg');
+      if (_title.text.isEmpty) _title.text = p.name;
+      _selectedCategorySlug = p.categorySlug;
+    });
+  }
+
+  /// Bottom-sheet flow that adds a brand-new catalogue product for the current
+  /// category. Creation happens server-side through the authenticated seller
+  /// endpoint — the wizard never fabricates product data itself.
+  Future<void> _addNewProduct() async {
+    final cat =
+        _categories?.where((c) => c.slug == _selectedCategorySlug).firstOrNull;
+    if (cat == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text(
+            'Pick a category first — new products are added inside a category.'),
+      ));
+      return;
+    }
+    if (_addingProductLock) return;
+    _addingProductLock = true;
+    try {
+      final created = await showModalBottomSheet<ProductSummary>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => _NewProductSheet(
+          category: cat,
+          units: _units,
+          profile: profileFor(cat.slug),
+        ),
+      );
+      if (created == null || !mounted) return;
+      setState(() {
+        _products = [
+          for (final p in _products)
+            if (p.id != created.id) p,
+          created,
+        ];
+        _product = created;
+        _unitCode = created.defaultUnit.isNotEmpty
+            ? created.defaultUnit
+            : (profileFor(created.categorySlug).preferredUnits.firstOrNull ??
+                'kg');
+        _selectedCategorySlug = created.categorySlug;
+        _productQuery.clear();
+        if (_title.text.isEmpty) _title.text = created.name;
+      });
+    } finally {
+      _addingProductLock = false;
+    }
+  }
+
   Widget _offerStep() {
     final cats = _categories ?? const <Category>[];
-    final cat = cats
-        .where((c) => c.slug == _selectedCategorySlug)
-        .firstOrNull;
-    final visible = _selectedCategorySlug == null
+    final cat = cats.where((c) => c.slug == _selectedCategorySlug).firstOrNull;
+    final query = _productQuery.text.trim().toLowerCase();
+    var visible = _selectedCategorySlug == null
         ? _products
-        : _products.where((p) => p.categorySlug == _selectedCategorySlug).toList();
+        : _products
+            .where((p) => p.categorySlug == _selectedCategorySlug)
+            .toList();
+    if (query.isNotEmpty) {
+      visible =
+          visible.where((p) => p.name.toLowerCase().contains(query)).toList();
+    }
+    final searching = query.isNotEmpty;
+    final anyInCategory = _selectedCategorySlug != null &&
+        _products.any((p) => p.categorySlug == _selectedCategorySlug);
     return Column(children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(18, 10, 18, 6),
@@ -904,7 +992,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
               child: ChoiceChip(
                 label: const Text('All'),
                 selected: _selectedCategorySlug == null,
-                onSelected: (_) => setState(() => _selectedCategorySlug = null),
+                onSelected: (_) => _selectCategory(null),
               ),
             ),
             for (final c in cats)
@@ -914,27 +1002,58 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                   avatar: Text(c.icon),
                   label: Text(c.name),
                   selected: _selectedCategorySlug == c.slug,
-                  onSelected: (_) =>
-                      setState(() => _selectedCategorySlug = c.slug),
+                  onSelected: (_) => _selectCategory(c.slug),
                 ),
               ),
           ],
         ),
       ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(18, 4, 18, 0),
+        child: TextField(
+          controller: _productQuery,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            isDense: true,
+            prefixIcon: const Icon(Icons.search, size: 20),
+            suffixIcon: searching
+                ? IconButton(
+                    icon: const Icon(Icons.clear, size: 18),
+                    onPressed: () => setState(_productQuery.clear),
+                  )
+                : null,
+            hintText: 'Search items…',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(IjwiRadius.sm),
+            ),
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+      ),
       if (cat != null)
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 8, 18, 0),
-          child: Text(
-            _profile.guidance.isEmpty
-                ? 'Choose the exact item you are offering.'
-                : _profile.guidance,
-            style: const TextStyle(color: IjwiColors.muted, fontSize: 12.5),
-          ),
+          child: Row(children: [
+            Expanded(
+              child: Text(
+                _profile.guidance.isEmpty
+                    ? 'Choose the exact item you are offering.'
+                    : _profile.guidance,
+                style: const TextStyle(color: IjwiColors.muted, fontSize: 12.5),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.tonalIcon(
+              onPressed: _addingProductLock ? null : _addNewProduct,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add new item'),
+            ),
+          ]),
         ),
       const SizedBox(height: 6),
       Expanded(
         child: visible.isEmpty
-            ? const Center(child: Text('No items in this category yet.'))
+            ? _offerEmpty(searching: searching, anyInCategory: anyInCategory)
             : ListView.builder(
                 padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
                 itemCount: visible.length,
@@ -946,11 +1065,13 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(IjwiRadius.sm),
                       side: selected
-                          ? const BorderSide(color: IjwiColors.green, width: 1.6)
+                          ? const BorderSide(
+                              color: IjwiColors.green, width: 1.6)
                           : BorderSide.none,
                     ),
                     child: ListTile(
-                      leading: Text(p.emoji, style: const TextStyle(fontSize: 26)),
+                      leading:
+                          Text(p.emoji, style: const TextStyle(fontSize: 26)),
                       title: Text(p.name,
                           style: const TextStyle(fontWeight: FontWeight.w700)),
                       subtitle: Text(
@@ -959,20 +1080,76 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                           ? const Icon(Icons.check_circle,
                               color: IjwiColors.green)
                           : null,
-                      onTap: () => setState(() {
-                        _product = p;
-                        _unitCode = p.defaultUnit;
-                        if (_title.text.isEmpty) {
-                          _title.text = p.name;
-                        }
-                        if (_category == null) _category = cat;
-                      }),
+                      onTap: () => _selectProduct(p, cat),
                     ),
                   );
                 },
               ),
       ),
     ]);
+  }
+
+  Widget _offerEmpty({required bool searching, required bool anyInCategory}) {
+    final hasCategory = _selectedCategorySlug != null;
+    final hasProducts = _products.isNotEmpty;
+    final Widget icon = searching
+        ? const Icon(Icons.search_off, size: 40, color: IjwiColors.muted)
+        : const Icon(Icons.inbox_outlined, size: 40, color: IjwiColors.muted);
+    final String title;
+    final String hint;
+    if (searching) {
+      title = 'No item matches “${_productQuery.text.trim()}”';
+      hint = 'Check the spelling or clear the search to see all items.';
+    } else if (hasCategory && !anyInCategory) {
+      title = 'No items in this category yet';
+      hint = _offlineCatalog
+          ? 'You are offline — add items once your connection is back, '
+              'or come back online to load more of the catalogue.'
+          : 'Be the first here! Add a new item in this category, or pick '
+              'another category.';
+    } else if (!hasProducts) {
+      title = 'No items in the catalogue yet';
+      hint = _offlineCatalog
+          ? 'Connect once so the listing catalogue is saved for offline use.'
+          : 'Add the first product to start listing.';
+    } else {
+      title = hasCategory
+          ? 'No items in this category yet'
+          : 'No items in the catalogue yet';
+      hint = 'You can add a new item below — it immediately becomes '
+          'part of the marketplace catalogue.';
+    }
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          icon,
+          const SizedBox(height: 10),
+          Text(title,
+              textAlign: TextAlign.center,
+              style:
+                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          Text(hint,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: IjwiColors.muted, fontSize: 12.5)),
+          if (searching)
+            TextButton(
+              onPressed: () => setState(_productQuery.clear),
+              child: const Text('Clear search'),
+            )
+          else if (hasCategory)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: FilledButton.icon(
+                onPressed: _addingProductLock ? null : _addNewProduct,
+                icon: const Icon(Icons.add),
+                label: const Text('Add a new item'),
+              ),
+            ),
+        ]),
+      ),
+    );
   }
 
   // ------------------------------------------------------------ step: 1
@@ -982,8 +1159,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
       children: [
-        if (_profile.guidance.isNotEmpty)
-          _infoCard(_profile.guidance),
+        if (_profile.guidance.isNotEmpty) _infoCard(_profile.guidance),
         TextField(
           controller: _title,
           maxLength: 90,
@@ -1032,17 +1208,18 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
               initialValue: _productionMethod ?? '',
-              decoration:
-                  const InputDecoration(labelText: 'Production method (optional)'),
+              decoration: const InputDecoration(
+                  labelText: 'Production method (optional)'),
               items: [
                 const DropdownMenuItem(value: '', child: Text('Not stated')),
                 for (final m in productionMethods)
                   DropdownMenuItem(
                       value: m,
-                      child: Text(m.replaceAll('_', ' ').toLowerCase().capFirst())),
+                      child: Text(
+                          m.replaceAll('_', ' ').toLowerCase().capFirst())),
               ],
-              onChanged: (v) => setState(
-                  () => _productionMethod = v == '' ? null : v),
+              onChanged: (v) =>
+                  setState(() => _productionMethod = v == '' ? null : v),
             ),
             const SizedBox(height: 10),
           ],
@@ -1167,8 +1344,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
-              decoration: const InputDecoration(
-                  labelText: 'Quantity', counterText: ''),
+              decoration:
+                  const InputDecoration(labelText: 'Quantity', counterText: ''),
               maxLength: 9,
               onChanged: (_) => setState(() {}),
             ),
@@ -1183,8 +1360,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
               items: [
                 for (final u in units)
                   DropdownMenuItem(
-                      value: u.code,
-                      child: Text('${u.code} — ${u.label}')),
+                      value: u.code, child: Text('${u.code} — ${u.label}')),
               ],
               onChanged: (v) => setState(() {
                 if (v != null) _unitCode = v;
@@ -1361,8 +1537,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   }) {
     return TextField(
       controller: controller,
-      keyboardType:
-          const TextInputType.numberWithOptions(decimal: true),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
       style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
       decoration: InputDecoration(
         labelText: label,
@@ -1379,7 +1554,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
   void _schedulePriceAdvice() {
     _adviceDebounce?.cancel();
-    _adviceDebounce = Timer(const Duration(milliseconds: 700), _fetchPriceAdvice);
+    _adviceDebounce =
+        Timer(const Duration(milliseconds: 700), _fetchPriceAdvice);
   }
 
   Future<void> _fetchPriceAdvice() async {
@@ -1435,23 +1611,22 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         Text('Where is it?',
             style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
-        const Text('Buyers search by region — an approximate location keeps you safe.',
+        const Text(
+            'Buyers search by region — an approximate location keeps you safe.',
             style: TextStyle(color: IjwiColors.muted, fontSize: 12.5)),
         const SizedBox(height: 16),
         TextField(
           controller: _region,
           textCapitalization: TextCapitalization.words,
           decoration: const InputDecoration(
-              labelText: 'Region / province',
-              hintText: 'e.g. Northern'),
+              labelText: 'Region / province', hintText: 'e.g. Northern'),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _district,
           textCapitalization: TextCapitalization.words,
           decoration: const InputDecoration(
-              labelText: 'District (optional)',
-              hintText: 'e.g. Musanze'),
+              labelText: 'District (optional)', hintText: 'e.g. Musanze'),
         ),
         const SizedBox(height: 18),
         Text('How will buyers receive it?',
@@ -1473,7 +1648,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             }),
           ),
         const SizedBox(height: 16),
-        const Text('Delivery prices are quoted by the seller or logistics partner — never entered here.',
+        const Text(
+            'Delivery prices are quoted by the seller or logistics partner — never entered here.',
             style: TextStyle(color: IjwiColors.muted, fontSize: 12)),
       ],
     );
@@ -1489,7 +1665,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         Text('Photos',
             style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
-        const Text('Photos make listings sell faster. The first photo is the cover.',
+        const Text(
+            'Photos make listings sell faster. The first photo is the cover.',
             style: TextStyle(color: IjwiColors.muted, fontSize: 12.5)),
         const SizedBox(height: 12),
         Row(children: [
@@ -1508,8 +1685,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         if (hasExisting) ...[
           const SizedBox(height: 8),
           Text('${_serverMediaKeys.length} photo(s) already attached',
-              style: const TextStyle(
-                  color: IjwiColors.muted, fontSize: 12.5)),
+              style: const TextStyle(color: IjwiColors.muted, fontSize: 12.5)),
         ],
         if (_pendingMedia.isNotEmpty) ...[
           const SizedBox(height: 12),
@@ -1601,7 +1777,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: Image.file(File(item.path),
-                width: 64, height: 64, fit: BoxFit.cover,
+                width: 64,
+                height: 64,
+                fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => Container(
                     width: 64,
                     height: 64,
@@ -1610,42 +1788,41 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(index == 0 ? 'Cover photo' : 'Photo ${index + 1}',
-                      style: const TextStyle(fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 4),
-                  if (item.uploading) ...[
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                          value: item.progress, minHeight: 6),
-                    ),
-                    const SizedBox(height: 2),
-                    Text('Uploading ${(item.progress * 100).round()}%',
-                        style: const TextStyle(
-                            fontSize: 11, color: IjwiColors.muted)),
-                  ] else if (item.failed)
-                    Text('Upload failed — tap retry',
-                        style: const TextStyle(
-                            fontSize: 12, color: IjwiColors.red))
-                  else if (item.offlinePending)
-                    Text('Saved on this device — uploads when online',
-                        style: const TextStyle(
-                            fontSize: 12, color: Color(0xFF9A6B00)))
-                  else
-                    Text('Ready',
-                        style: const TextStyle(
-                            fontSize: 12, color: IjwiColors.greenDark)),
-                ]),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(index == 0 ? 'Cover photo' : 'Photo ${index + 1}',
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              if (item.uploading) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                      value: item.progress, minHeight: 6),
+                ),
+                const SizedBox(height: 2),
+                Text('Uploading ${(item.progress * 100).round()}%',
+                    style:
+                        const TextStyle(fontSize: 11, color: IjwiColors.muted)),
+              ] else if (item.failed)
+                Text('Upload failed — tap retry',
+                    style: const TextStyle(fontSize: 12, color: IjwiColors.red))
+              else if (item.offlinePending)
+                Text('Saved on this device — uploads when online',
+                    style:
+                        const TextStyle(fontSize: 12, color: Color(0xFF9A6B00)))
+              else
+                Text('Ready',
+                    style: const TextStyle(
+                        fontSize: 12, color: IjwiColors.greenDark)),
+            ]),
           ),
           IconButton(
             tooltip: 'Move earlier',
             icon: const Icon(Icons.arrow_back),
             onPressed: index == 0 || item.uploading
                 ? null
-                : () => setState(() => _pendingMedia
-                    .insert(index - 1, _pendingMedia.removeAt(index))),
+                : () => setState(() => _pendingMedia.insert(
+                    index - 1, _pendingMedia.removeAt(index))),
           ),
           if (item.failed)
             IconButton(
@@ -1674,68 +1851,69 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    Text('${_product?.emoji ?? ''} ',
-                        style: const TextStyle(fontSize: 24)),
-                    Expanded(
-                      child: Text(
-                          _title.text.trim().isNotEmpty
-                              ? _title.text.trim()
-                              : _defaultTitle(),
-                          style: const TextStyle(
-                              fontSize: 17, fontWeight: FontWeight.w900)),
-                    ),
-                  ]),
-                  if (_description.text.trim().isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(_description.text.trim(),
-                          maxLines: 4,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: IjwiColors.muted)),
-                    ),
-                  const Divider(height: 22),
-                  _row('Offering', kindLabel(_profile.kind)),
-                  _row('Item', _product?.name ?? ''),
-                  _row('Quantity',
-                      '${_trimNum(_qtyValue ?? 0)} $_unitCode'),
-                  if (_isProduce && _quality != 'UNGRADED')
-                    _row('Quality', gradeLabel(_quality)),
-                  if (_variety.text.trim().isNotEmpty)
-                    _row('Variety', _variety.text.trim()),
-                  for (final f in _profile.fields)
-                    if (attrs.containsKey(f.key))
-                      _row(f.displayLabel,
-                          formatAttributeValue(f.key, attrs[f.key])),
-                  if (_mode == 'AUCTION')
-                    _row('Type', 'Auction · ends ${_auctionEnd == null ? '?' : _fmtDate(_auctionEnd!)} ${_auctionEnd == null ? '' : _fmtTime(_auctionEnd!)}')
-                  else ...[
-                    _row('Price',
-                        '${_priceMinor == null ? 'Not set' : '${formatRwf(_priceMinor!)} per $_unitCode'}'),
-                    if (_negotiable)
-                      _row('Negotiable', 'Open to offers'),
-                  ],
-                  if (_expectedHarvest != null)
-                    _row('Expected harvest', _fmtDate(_expectedHarvest!)),
-                  if (_availableFrom != null)
-                    _row('Available from', _fmtDate(_availableFrom!)),
-                  if (_delivery.isNotEmpty)
-                    _row('Delivery',
-                        _delivery.map((c) {
-                          for (final (code, label) in deliveryOptions) {
-                            if (code == c) return label;
-                          }
-                          return c;
-                        }).join(', ')),
-                  if (_region.text.trim().isNotEmpty)
-                    _row('Location',
-                        [_district.text.trim(), _region.text.trim()]
-                            .where((s) => s.isNotEmpty)
-                            .join(', ')),
-                  _row('Photos', photoCount == 0 ? 'None' : '$photoCount'),
-                ]),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Text('${_product?.emoji ?? ''} ',
+                    style: const TextStyle(fontSize: 24)),
+                Expanded(
+                  child: Text(
+                      _title.text.trim().isNotEmpty
+                          ? _title.text.trim()
+                          : _defaultTitle(),
+                      style: const TextStyle(
+                          fontSize: 17, fontWeight: FontWeight.w900)),
+                ),
+              ]),
+              if (_description.text.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(_description.text.trim(),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: IjwiColors.muted)),
+                ),
+              const Divider(height: 22),
+              _row('Offering', kindLabel(_profile.kind)),
+              _row('Item', _product?.name ?? ''),
+              _row('Quantity', '${_trimNum(_qtyValue ?? 0)} $_unitCode'),
+              if (_isProduce && _quality != 'UNGRADED')
+                _row('Quality', gradeLabel(_quality)),
+              if (_variety.text.trim().isNotEmpty)
+                _row('Variety', _variety.text.trim()),
+              for (final f in _profile.fields)
+                if (attrs.containsKey(f.key))
+                  _row(f.displayLabel,
+                      formatAttributeValue(f.key, attrs[f.key])),
+              if (_mode == 'AUCTION')
+                _row('Type',
+                    'Auction · ends ${_auctionEnd == null ? '?' : _fmtDate(_auctionEnd!)} ${_auctionEnd == null ? '' : _fmtTime(_auctionEnd!)}')
+              else ...[
+                _row('Price',
+                    '${_priceMinor == null ? 'Not set' : '${formatRwf(_priceMinor!)} per $_unitCode'}'),
+                if (_negotiable) _row('Negotiable', 'Open to offers'),
+              ],
+              if (_expectedHarvest != null)
+                _row('Expected harvest', _fmtDate(_expectedHarvest!)),
+              if (_availableFrom != null)
+                _row('Available from', _fmtDate(_availableFrom!)),
+              if (_delivery.isNotEmpty)
+                _row(
+                    'Delivery',
+                    _delivery.map((c) {
+                      for (final (code, label) in deliveryOptions) {
+                        if (code == c) return label;
+                      }
+                      return c;
+                    }).join(', ')),
+              if (_region.text.trim().isNotEmpty)
+                _row(
+                    'Location',
+                    [_district.text.trim(), _region.text.trim()]
+                        .where((s) => s.isNotEmpty)
+                        .join(', ')),
+              _row('Photos', photoCount == 0 ? 'None' : '$photoCount'),
+            ]),
           ),
         ),
         const SizedBox(height: 14),
@@ -1786,14 +1964,11 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   Widget _successBody() {
     final l = _published!;
     final pm = l.priceMinor;
-    final priceNote = pm == null
-        ? ''
-        : ' · ${formatRwf(pm)} per ${l.unitCode}';
+    final priceNote = pm == null ? '' : ' · ${formatRwf(pm)} per ${l.unitCode}';
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(28),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           const Text('🎉', style: TextStyle(fontSize: 54)),
           const SizedBox(height: 12),
           const Text('Your listing is live!',
@@ -1875,16 +2050,14 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
   Widget _row(String k, String v) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                  width: 130,
-                  child: Text(k,
-                      style: const TextStyle(color: IjwiColors.muted))),
-              Expanded(
-                  child: Text(v,
-                      style: const TextStyle(fontWeight: FontWeight.w600))),
-            ]),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(
+              width: 130,
+              child: Text(k, style: const TextStyle(color: IjwiColors.muted))),
+          Expanded(
+              child:
+                  Text(v, style: const TextStyle(fontWeight: FontWeight.w600))),
+        ]),
       );
 
   String _trimNum(num v) =>
@@ -1897,15 +2070,24 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         : major.toStringAsFixed(2);
   }
 
-  String _dateOnly(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
+  String _dateOnly(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
 
   String _fmtDate(DateTime d) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${d.day} ${months[d.month - 1]} ${d.year}';
   }
@@ -1917,7 +2099,166 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   }
 }
 
+/// Bottom sheet that lets a seller contribute a brand-new catalogue product.
+///
+/// The product is created server-side via the authenticated seller endpoint
+/// (`POST /catalog/products`) — the wizard only collects the name and default
+/// unit, then stores whichever product the backend returns (an existing match
+/// or a newly created row).
+class _NewProductSheet extends ConsumerStatefulWidget {
+  const _NewProductSheet({
+    required this.category,
+    required this.units,
+    required this.profile,
+  });
+
+  final Category category;
+  final List<UnitOption> units;
+  final CategoryProfile profile;
+
+  @override
+  ConsumerState<_NewProductSheet> createState() => _NewProductSheetState();
+}
+
+class _NewProductSheetState extends ConsumerState<_NewProductSheet> {
+  final _name = TextEditingController();
+  late String? _unitCode;
+  bool _submitting = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final preferred = widget.profile.preferredUnits
+        .where((u) => widget.units.any((x) => x.code == u))
+        .firstOrNull;
+    _unitCode = preferred ?? widget.units.firstOrNull?.code ?? 'kg';
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final name = _name.text.trim();
+    if (name.length < 2) {
+      setState(() => _error = 'Give the item a name (at least 2 characters).');
+      return;
+    }
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    try {
+      final created =
+          await ref.read(marketplaceRepositoryProvider).createProductForListing(
+                name: name,
+                categoryId: widget.category.id,
+                categorySlug: widget.category.slug,
+                defaultUnit: _unitCode ?? 'kg',
+                emoji: widget.category.icon,
+              );
+      if (!mounted) return;
+      Navigator.of(context).pop(created);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _error = ApiClient.isOfflineError(e)
+            ? "You're offline — adding a new item needs a connection. "
+                'Try again when you are back online.'
+            : ApiClient.errorMessage(e);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final safeBottom = MediaQuery.of(context).padding.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: safeBottom),
+      child: Material(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: IjwiColors.muted,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text('${widget.category.icon} Add a new product',
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text(
+                  'It will be added to “${widget.category.name}” in the '
+                  'marketplace catalogue for everyone.',
+                  style:
+                      const TextStyle(color: IjwiColors.muted, fontSize: 12.5)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _name,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                maxLength: 160,
+                decoration: const InputDecoration(
+                  labelText: 'Item name *',
+                  hintText: 'e.g. Hass avocado, Ankole heifer, Silage (50kg)',
+                  counterText: '',
+                ),
+                onSubmitted: (_) => _submit(),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _unitCode,
+                decoration: const InputDecoration(
+                  labelText: 'Default unit (optional)',
+                  helperText: 'How is it usually sold — per kg, piece, day…',
+                ),
+                items: [
+                  for (final u in widget.units)
+                    DropdownMenuItem(
+                        value: u.code, child: Text('${u.code} — ${u.label}')),
+                ],
+                onChanged: (v) => setState(() => _unitCode = v),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!,
+                    style:
+                        const TextStyle(color: IjwiColors.red, fontSize: 12.5)),
+              ],
+              const SizedBox(height: 18),
+              FilledButton(
+                onPressed: _submitting ? null : _submit,
+                child: _submitting
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Add to catalogue'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 extension _CapFirst on String {
-  String capFirst() =>
-      isEmpty ? this : this[0].toUpperCase() + substring(1);
+  String capFirst() => isEmpty ? this : this[0].toUpperCase() + substring(1);
 }

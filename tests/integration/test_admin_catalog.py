@@ -11,9 +11,9 @@ def _make_admin(app, user_tokens):
         me = _db.session.get(User, user_tokens["id"])
         me.roles.append(UserRole(role="ADMIN"))
         _db.session.commit()
-    # Drop the (possibly ambient, identity-mapped) session so later requests
-    # reload the user and its roles from the database instead of stale state.
-    _db.session.remove()
+        # Drop the (possibly ambient, identity-mapped) session so later requests
+        # reload the user and its roles from the database instead of stale state.
+        _db.session.remove()
 
 
 def test_non_admin_cannot_manage_catalogue(client, buyer):

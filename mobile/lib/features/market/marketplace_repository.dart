@@ -7,7 +7,11 @@ import 'marketplace_models.dart';
 
 /// Paginated response shape used by every backend list endpoint.
 class Paged<T> {
-  Paged({required this.items, required this.page, required this.perPage, required this.total});
+  Paged(
+      {required this.items,
+      required this.page,
+      required this.perPage,
+      required this.total});
 
   final List<T> items;
   final int page;
@@ -60,6 +64,28 @@ class MarketplaceRepository {
         .toList();
     _cacheRows('products', rows, (j) => j['id']);
     return rows.map(ProductSummary.fromJson).toList();
+  }
+
+  /// Creates (or returns an existing matching) catalogue product from the
+  /// listing wizard. Any authenticated seller may contribute a product — the
+  /// backend find-or-creates by name slug, so duplicate names map to one row.
+  Future<ProductSummary> createProductForListing({
+    required String name,
+    required String categoryId,
+    String? categorySlug,
+    String defaultUnit = 'kg',
+    String emoji = '',
+  }) async {
+    final res = await _api.postJson('/catalog/products', {
+      'name': name,
+      'category_id': categoryId,
+      if (categorySlug != null && categorySlug.isNotEmpty)
+        'category_slug': categorySlug,
+      'default_unit': defaultUnit,
+      if (emoji.isNotEmpty) 'emoji': emoji,
+    });
+    _cacheRows('products', [res], (j) => j['id']);
+    return ProductSummary.fromJson(res);
   }
 
   /// Best-effort write-through of raw API rows into a cache collection so the
@@ -221,11 +247,11 @@ class MarketplaceRepository {
     final listingJson = res['listing'] as Map<String, dynamic>;
     final l = Listing.fromJson(listingJson);
     // The detail endpoint nests media inside the listing payload.
-    final media = ((listingJson['media'] as List?) ??
-            (res['media'] as List?) ?? const [])
-        .whereType<Map<String, dynamic>>()
-        .map(ListingMedia.fromJson)
-        .toList();
+    final media =
+        ((listingJson['media'] as List?) ?? (res['media'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(ListingMedia.fromJson)
+            .toList();
     return (l, media);
   }
 
@@ -323,7 +349,8 @@ class MarketplaceRepository {
   }
 
   /// Posts the listing to the user's Status (backend creates the status).
-  Future<void> statusFromListing(String listingId, {String caption = ''}) async {
+  Future<void> statusFromListing(String listingId,
+      {String caption = ''}) async {
     await _api.postJson('/statuses/from-listing', {
       'listing_id': listingId,
       if (caption.isNotEmpty) 'caption': caption,
@@ -351,13 +378,14 @@ class MarketplaceRepository {
     void Function(double fraction)? onProgress,
   }) async {
     final fileName = filePath.split('/').last;
-    final response = await _api.dio.post('/uploads/image', data: FormData.fromMap({
-      'file': await MultipartFile.fromFile(
-        filePath,
-        filename: fileName,
-        contentType: DioMediaType.parse(_guessImageContentType(fileName)),
-      ),
-    }), onSendProgress: (sent, total) {
+    final response = await _api.dio.post('/uploads/image',
+        data: FormData.fromMap({
+          'file': await MultipartFile.fromFile(
+            filePath,
+            filename: fileName,
+            contentType: DioMediaType.parse(_guessImageContentType(fileName)),
+          ),
+        }), onSendProgress: (sent, total) {
       if (total > 0 && onProgress != null) onProgress(sent / total);
     });
     final data = response.data as Map<String, dynamic>;
@@ -371,7 +399,8 @@ class MarketplaceRepository {
     return 'image/jpeg';
   }
 
-  Future<Listing> updateListing(String listingId, Map<String, dynamic> patch) async {
+  Future<Listing> updateListing(
+      String listingId, Map<String, dynamic> patch) async {
     final res = await _api.patchJson('/listings/$listingId', patch);
     return Listing.fromJson(res['listing'] as Map<String, dynamic>);
   }
@@ -426,7 +455,8 @@ class MarketplaceRepository {
     return Offer.fromJson(res['offer'] as Map<String, dynamic>);
   }
 
-  Future<Offer> counterOffer(String offerId, {required int priceMinor, double? quantity, String message = ''}) async {
+  Future<Offer> counterOffer(String offerId,
+      {required int priceMinor, double? quantity, String message = ''}) async {
     final res = await _api.postJson('/offers/$offerId/counter', {
       'price_minor': priceMinor,
       if (quantity != null) 'quantity_value': quantity,
@@ -482,13 +512,15 @@ class MarketplaceRepository {
   }
 
   Future<OrderJson> acceptWinningBid(String listingId) async {
-    final res = await _api.postJson('/listings/$listingId/accept-winning-bid', {});
+    final res =
+        await _api.postJson('/listings/$listingId/accept-winning-bid', {});
     return OrderJson.fromJson(res['order'] as Map<String, dynamic>);
   }
 
   // ---- buyer requests & opportunities ----
 
-  Future<Paged<BuyerRequest>> buyerRequests({int page = 1, int perPage = 30}) async {
+  Future<Paged<BuyerRequest>> buyerRequests(
+      {int page = 1, int perPage = 30}) async {
     final res = await _api.getJson('/buyer-requests', query: {
       'page': '$page',
       'per_page': '$perPage',
@@ -528,7 +560,8 @@ class MarketplaceRepository {
 
   // ---- orders ----
 
-  Future<Paged<OrderJson>> orders({String? state, String? role, int page = 1, int perPage = 50}) async {
+  Future<Paged<OrderJson>> orders(
+      {String? state, String? role, int page = 1, int perPage = 50}) async {
     final res = await _api.getJson('/orders', query: {
       if (state != null) 'state': state,
       if (role != null) 'role': role,
@@ -552,7 +585,8 @@ class MarketplaceRepository {
     return OrderJson.fromJson(res['order'] as Map<String, dynamic>);
   }
 
-  Future<OrderJson> createOrderDraft({required String listingId, required double quantity}) async {
+  Future<OrderJson> createOrderDraft(
+      {required String listingId, required double quantity}) async {
     final res = await _api.postJson('/orders/draft', {
       'listing_id': listingId,
       'quantity_value': quantity,
@@ -560,7 +594,8 @@ class MarketplaceRepository {
     return OrderJson.fromJson(res['order'] as Map<String, dynamic>);
   }
 
-  Future<OrderJson> transitionOrder(String orderId, String state, {String reason = ''}) async {
+  Future<OrderJson> transitionOrder(String orderId, String state,
+      {String reason = ''}) async {
     final res = await _api.postJson('/orders/$orderId/transition', {
       'state': state,
       'reason': reason,
@@ -569,11 +604,13 @@ class MarketplaceRepository {
   }
 
   Future<OrderJson> cancelOrder(String orderId, {String reason = ''}) async {
-    final res = await _api.postJson('/orders/$orderId/cancel', {'reason': reason});
+    final res =
+        await _api.postJson('/orders/$orderId/cancel', {'reason': reason});
     return OrderJson.fromJson(res['order'] as Map<String, dynamic>);
   }
 
-  Future<Map<String, dynamic>> initiatePayment(String orderId, {String provider = 'mock', String? method, String? phone}) async {
+  Future<Map<String, dynamic>> initiatePayment(String orderId,
+      {String provider = 'mock', String? method, String? phone}) async {
     return _api.postJson('/orders/$orderId/payments', {
       'provider': provider,
       'method': method ?? 'mobile_money',
@@ -602,7 +639,8 @@ class MarketplaceRepository {
   }
 
   Future<List<WalletLedgerEntry>> walletLedger({int perPage = 30}) async {
-    final res = await _api.getJson('/wallet/ledger', query: {'per_page': '$perPage'});
+    final res =
+        await _api.getJson('/wallet/ledger', query: {'per_page': '$perPage'});
     return (res['entries'] as List? ?? const [])
         .whereType<Map<String, dynamic>>()
         .map(WalletLedgerEntry.fromJson)
@@ -648,13 +686,16 @@ class MarketplaceRepository {
   }
 
   Future<SavedSearch> createSavedSearch(
-      {required String label, required Map<String, dynamic> query, bool notify = true}) async {
+      {required String label,
+      required Map<String, dynamic> query,
+      bool notify = true}) async {
     final res = await _api.postJson('/saved-searches', {
       'name': label,
       'query_json': query,
       'notify': notify,
     });
-    return SavedSearch.fromJson((res['saved_search'] as Map<String, dynamic>)..['query'] = query);
+    return SavedSearch.fromJson(
+        (res['saved_search'] as Map<String, dynamic>)..['query'] = query);
   }
 
   Future<void> deleteSavedSearch(String searchId) async {
@@ -679,7 +720,8 @@ class MarketplaceRepository {
 
   // ---- market prices ----
 
-  Future<List<MarketPriceRow>> marketPrices({String? product, String? region, int days = 7}) async {
+  Future<List<MarketPriceRow>> marketPrices(
+      {String? product, String? region, int days = 7}) async {
     final res = await _api.getJson('/market-prices', query: {
       'days': '$days',
       'limit': '60',

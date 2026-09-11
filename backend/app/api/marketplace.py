@@ -15,26 +15,6 @@ from app.services.listing_service import price_advisor
 from app.services.security import get_current_user
 
 
-def list_products():
-    q = Product.query.filter(Product.deleted_at.is_(None))
-    category = query_params().get("category")
-    search = query_params().get("q")
-    if category:
-        cat = ProductCategory.query.filter_by(slug=category).first()
-        if cat:
-            q = q.filter(Product.category_id == cat.id)
-    if search:
-        q = q.filter(Product.name.ilike(f"%{search}%"))
-    products = q.order_by(Product.name).limit(300).all()
-    return {
-        "products": [
-            {"id": p.id, "name": p.name, "slug": p.slug, "default_unit": p.default_unit,
-             "emoji": p.emoji, "category": p.category.slug if p.category else None}
-            for p in products
-        ]
-    }
-
-
 def list_categories():
     cats = ProductCategory.query.order_by(ProductCategory.name).all()
     return {"categories": [{"id": c.id, "name": c.name, "slug": c.slug, "icon": c.icon} for c in cats]}
