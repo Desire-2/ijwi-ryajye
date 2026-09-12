@@ -4,8 +4,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 
+import '../../core/media/media_models.dart';
+import '../../core/media/media_picker.dart';
+import '../../core/media/media_repository.dart';
+import '../../core/media/media_widgets.dart';
 import '../../core/network/api_client.dart';
 import '../../core/theme/design_system.dart';
 import '../../core/utils/money.dart';
@@ -15,13 +18,27 @@ import 'ai_listing_draft_sheet.dart';
 import 'listing_share_sheet.dart';
 import 'listing_wizard_engine.dart';
 
-/// A photo the seller picked for this listing. Uploads happen right after
-/// picking so each file shows its own state and can retry independently.
+/// A photo on the Photos step. Local picks are uploaded through the shared
+/// [MediaRepository]; photos already attached server-side (resumed drafts)
+/// carry a [serverKey] + [url] so they still render and stay removable.
 class _MediaItem {
-  _MediaItem(this.path);
+  _MediaItem(this.path, {this.local, this.serverKey, this.url});
 
   final String path;
+
+  /// Non-null for a fresh local pick (before/while uploading).
+  LocalMediaItem? local;
+
+  /// Uploaded storage key — set once a local photo is uploaded, and also on
+  /// every server-attached photo so dedupe/order logic is uniform.
   String? storageKey;
+
+  /// Non-null when this photo is already attached to the listing server-side.
+  String? serverKey;
+
+  /// Remote thumbnail URL for server-attached photos.
+  String? url;
+
   double progress = 0;
   bool uploading = false;
   bool failed = false;
@@ -29,6 +46,12 @@ class _MediaItem {
   /// Upload attempt hit an offline error — keep the local file and retry
   /// when a connection is back (part of the offline draft flow).
   bool offlinePending = false;
+
+  bool get isServer => serverKey != null;
+
+  /// Whether this photo will be uploaded/attached on save (vs. already saved).
+  bool get pendingUpload =>
+      storageKey == null && !uploading && !failed && !isServer;
 }
 
 /// Universal "Create Listing" wizard — ONE listing engine for the whole
@@ -252,6 +275,11 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         }
       }
       final catSlug = match?.categorySlug;
+      final serverTiles = [
+        for (final m in media)
+          _MediaItem('', serverKey: m.storageKey, url: m.url)
+            ..storageKey = m.storageKey,
+      ];
       setState(() {
         _listingId = id;
         if (match != null) {
@@ -278,6 +306,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           ..clear()
           ..addAll(listing.attributes);
         _serverMediaKeys = media.map((m) => m.storageKey).toList();
+        _pendingMedia
+          ..clear()
+          ..addAll(serverTiles);
         final price = listing.priceMinor;
         if (price != null && !listing.isAuction) {
           _price.text = _trimMoney(price);
@@ -326,8 +357,12 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         'auction_end': _auctionEnd?.toIso8601String(),
         'media': [
           for (final m in _pendingMedia)
-            if (m.storageKey != null || m.path.isNotEmpty)
-              {'path': m.path, 'storage_key': m.storageKey},
+            {
+              if (m.path.isNotEmpty) 'path': m.path,
+              if (m.storageKey != null) 'storage_key': m.storageKey,
+              if (m.url != null) 'url': m.url,
+              'server': m.isServer,
+            },
         ],
         'step': _step,
         'updated_at': DateTime.now().toIso8601String(),
@@ -399,24 +434,31 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       _expectedHarvest =
           DateTime.tryParse(d['expected_harvest'] as String? ?? '');
       _auctionEnd = DateTime.tryParse(d['auction_end'] as String? ?? '');
-      _serverMediaKeys = [
-        for (final m in (d['media'] as List? ?? const []))
-          if (m is Map<String, dynamic> && m['storage_key'] is String)
-            m['storage_key'] as String,
-      ];
       _pendingMedia
         ..clear()
         ..addAll([
           for (final m in (d['media'] as List? ?? const []))
-            if (m is Map<String, dynamic> &&
-                (m['path'] as String?)?.isNotEmpty == true)
-              _MediaItem(m['path'] as String)
-                ..storageKey = m['storage_key'] as String?,
+            if (m is Map<String, dynamic>) _restoreMediaTile(m),
         ]);
+      _serverMediaKeys = [
+        for (final m in _pendingMedia)
+          if (m.storageKey != null) m.storageKey!,
+      ];
       _step = step == null
           ? (match == null ? 0 : 1)
           : step.clamp(0, _steps.length - 1);
     });
+  }
+
+  /// Rebuilds one photo tile from a device-local draft capture.
+  _MediaItem _restoreMediaTile(Map<String, dynamic> m) {
+    final key = m['storage_key'] as String?;
+    final server = m['server'] == true;
+    return _MediaItem(
+      (m['path'] as String?) ?? '',
+      serverKey: server ? key : null,
+      url: m['url'] as String?,
+    )..storageKey = key;
   }
 
   // ----------------------------------------------------- AI draft assist
@@ -549,6 +591,11 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             .toList();
         setState(() {
           _serverMediaKeys = [..._serverMediaKeys, ...sentKeys];
+          for (final item in _pendingMedia) {
+            if (sentKeys.contains(item.storageKey)) {
+              item.serverKey = item.storageKey;
+            }
+          }
         });
       } else {
         await repo.updateListing(_listingId!, _buildPatchPayload());
@@ -602,7 +649,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   /// failed purely because there was no connection).
   Future<void> _uploadPendingMedia() async {
     for (final item in _pendingMedia) {
-      if (item.storageKey == null && !item.failed && !item.uploading) {
+      if (item.pendingUpload) {
         await _upload(item);
       }
     }
@@ -617,11 +664,13 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         .toList();
     if (keys.isEmpty || _listingId == null) return;
     await repo.attachListingMedia(_listingId!, keys);
+    final addedKeys = keys.map((k) => k['storage_key'] as String).toList();
     setState(() {
-      _serverMediaKeys = [
-        ..._serverMediaKeys,
-        ...keys.map((k) => k['storage_key'] as String),
-      ];
+      _serverMediaKeys = [..._serverMediaKeys, ...addedKeys];
+      for (final item in _pendingMedia) {
+        if (addedKeys.contains(item.storageKey))
+          item.serverKey = item.storageKey;
+      }
     });
   }
 
@@ -1658,7 +1707,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   // ---------------------------------------------------------- step: 5
 
   Widget _photosStep() {
-    final hasExisting = _serverMediaKeys.isNotEmpty;
+    final count = _pendingMedia.length;
+    final atLimit = count >= 6;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
       children: [
@@ -1669,30 +1719,19 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             'Photos make listings sell faster. The first photo is the cover.',
             style: TextStyle(color: IjwiColors.muted, fontSize: 12.5)),
         const SizedBox(height: 12),
-        Row(children: [
-          OutlinedButton.icon(
-            icon: const Icon(Icons.photo_library_outlined),
-            label: const Text('Gallery'),
-            onPressed: _busy ? null : _pickFromGallery,
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FilledButton.icon(
+            icon: const Icon(Icons.add_a_photo_outlined),
+            label:
+                Text(atLimit ? 'Maximum 6 photos' : 'Add photos (${count}/6)'),
+            onPressed: _busy || atLimit ? null : _openPhotoOptions,
           ),
-          const SizedBox(width: 10),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.photo_camera_outlined),
-            label: const Text('Camera'),
-            onPressed: _busy ? null : _takePhoto,
-          ),
-        ]),
-        if (hasExisting) ...[
-          const SizedBox(height: 8),
-          Text('${_serverMediaKeys.length} photo(s) already attached',
-              style: const TextStyle(color: IjwiColors.muted, fontSize: 12.5)),
-        ],
-        if (_pendingMedia.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          for (var i = 0; i < _pendingMedia.length; i++)
-            _mediaTile(_pendingMedia[i], i),
-        ],
-        if (_pendingMedia.isEmpty && !hasExisting)
+        ),
+        const SizedBox(height: 4),
+        const Text('Choose from your gallery or take a new photo.',
+            style: TextStyle(color: IjwiColors.muted, fontSize: 12)),
+        if (count == 0)
           Padding(
             padding: const EdgeInsets.only(top: 22),
             child: Container(
@@ -1706,50 +1745,122 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                   child: Text('No photos yet — you can publish without them')),
             ),
           ),
+        if (count > 0) ...[
+          const SizedBox(height: 12),
+          for (var i = 0; i < _pendingMedia.length; i++)
+            _mediaTile(_pendingMedia[i], i),
+          const SizedBox(height: 4),
+          const Text('Drag order matters: the first tile is the cover.',
+              style: TextStyle(color: IjwiColors.muted, fontSize: 12)),
+        ],
         const SizedBox(height: 24),
       ],
     );
   }
 
+  Future<void> _openPhotoOptions() async {
+    if (_busy || _pendingMedia.length >= 6) return;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheet) => SafeArea(
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+          decoration: BoxDecoration(
+            color: Theme.of(sheet).colorScheme.surface,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 14, 16, 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Add photos',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined,
+                  color: IjwiColors.green),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(sheet, 'gallery'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined,
+                  color: IjwiColors.green),
+              title: const Text('Take a photo'),
+              onTap: () => Navigator.pop(sheet, 'camera'),
+            ),
+            const SizedBox(height: 6),
+          ]),
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'gallery') {
+      await _pickFromGallery();
+    } else {
+      await _takePhoto();
+    }
+  }
+
   Future<void> _pickFromGallery() async {
-    final files = await ImagePicker().pickMultiImage(
-        limit: 6 - _pendingMedia.length - _serverMediaKeys.length);
-    if (files.isEmpty) return;
+    final limit = 6 - _pendingMedia.length;
+    if (limit <= 0) return;
+    final picked = await ref.read(mediaPickerProvider).pickImages(limit: limit);
+    if (picked.isEmpty || !mounted) return;
+    final added = <_MediaItem>[];
     setState(() {
-      for (final f in files) {
-        _pendingMedia.add(_MediaItem(f.path));
+      for (final p in picked) {
+        final item = _MediaItem(p.path, local: p);
+        _pendingMedia.add(item);
+        added.add(item);
       }
     });
-    for (final item in _pendingMedia) {
-      if (!item.uploading && item.storageKey == null && !item.failed) {
-        _upload(item);
-      }
+    for (final item in added) {
+      _upload(item);
     }
   }
 
   Future<void> _takePhoto() async {
-    final f = await ImagePicker().pickImage(source: ImageSource.camera);
-    if (f == null) return;
-    setState(() => _pendingMedia.add(_MediaItem(f.path)));
-    _upload(_pendingMedia.last);
+    if (_pendingMedia.length >= 6) return;
+    final perm = await ref.read(mediaPermissionsProvider).camera();
+    if (perm != PermissionState.granted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Camera permission is required to take photos.')));
+      return;
+    }
+    final f = await ref.read(mediaPickerProvider).takePhoto();
+    if (f == null || !mounted) return;
+    final item = _MediaItem(f.path, local: f);
+    setState(() => _pendingMedia.add(item));
+    _upload(item);
   }
 
   Future<void> _upload(_MediaItem item) async {
+    if (item.isServer || item.uploading || item.storageKey != null) return;
     setState(() {
       item.uploading = true;
       item.failed = false;
       item.offlinePending = false;
       item.progress = 0;
     });
+    final local = item.local ??
+        LocalMediaItem(
+          id: 'listing-${item.path.hashCode}',
+          kind: MediaKind.image,
+          path: item.path,
+          fileName: item.path.split('/').last,
+        );
     try {
-      final key = await ref
-          .read(marketplaceRepositoryProvider)
-          .uploadListingImage(item.path, onProgress: (f) {
+      final media = await ref.read(mediaRepositoryProvider).upload(local,
+          onProgress: (f) {
         if (mounted) setState(() => item.progress = f);
       });
       if (!mounted) return;
       setState(() {
-        item.storageKey = key;
+        item.storageKey = media.storageKey;
         item.uploading = false;
         item.offlinePending = false;
         item.progress = 1;
@@ -1768,24 +1879,88 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     }
   }
 
+  /// Removes a photo from the step. Server-attached ones are detached via the
+  /// API; fresh/queued local picks simply drop out of the pending list.
+  Future<void> _removeMedia(_MediaItem item) async {
+    final idx = _pendingMedia.indexOf(item);
+    if (idx < 0) return;
+    final key = item.serverKey;
+    setState(() {
+      _pendingMedia.removeAt(idx);
+      if (key != null) _serverMediaKeys.remove(key);
+    });
+    if (key == null || _listingId == null) return;
+    try {
+      await ref
+          .read(marketplaceRepositoryProvider)
+          .removeListingMedia(_listingId!, [key]);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _pendingMedia.insert(idx.clamp(0, _pendingMedia.length), item);
+        _serverMediaKeys.add(key);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:
+              Text('Could not remove photo: ${ApiClient.errorMessage(e)}')));
+    }
+  }
+
+  /// Moves a photo earlier (towards the cover) and syncs server order when the
+  /// listing already owns attached photos.
+  Future<void> _moveEarlier(_MediaItem item) async {
+    final idx = _pendingMedia.indexOf(item);
+    if (idx <= 0) return;
+    setState(() {
+      _pendingMedia.removeAt(idx);
+      _pendingMedia.insert(idx - 1, item);
+    });
+    await _syncMediaOrder();
+  }
+
+  /// Pushes the cover order to the server whenever attached photos exist.
+  Future<void> _syncMediaOrder() async {
+    if (_listingId == null) return;
+    final keys = _pendingMedia
+        .where((m) => m.serverKey != null)
+        .map((m) => m.serverKey!)
+        .toList();
+    if (keys.length >= 2) {
+      try {
+        await ref
+            .read(marketplaceRepositoryProvider)
+            .reorderListingMedia(_listingId!, keys);
+      } catch (_) {
+        // ordering is best-effort; the next save reconciles it.
+      }
+    }
+  }
+
   Widget _mediaTile(_MediaItem item, int index) {
+    final thumbnail = item.isServer
+        ? IjwiImage(
+            url: item.url ??
+                ref.read(mediaRepositoryProvider).resolveUrl(item.serverKey),
+            width: 64,
+            height: 64,
+            fit: BoxFit.cover,
+            borderRadius: 8,
+          )
+        : Image.file(File(item.path),
+            width: 64,
+            height: 64,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+                width: 64,
+                height: 64,
+                color: const Color(0xFFE4ECE7),
+                child: const Icon(Icons.image_outlined)));
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
         padding: const EdgeInsets.all(10),
         child: Row(children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.file(File(item.path),
-                width: 64,
-                height: 64,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                    width: 64,
-                    height: 64,
-                    color: const Color(0xFFE4ECE7),
-                    child: const Icon(Icons.image_outlined))),
-          ),
+          ClipRRect(borderRadius: BorderRadius.circular(8), child: thumbnail),
           const SizedBox(width: 12),
           Expanded(
             child:
@@ -1819,10 +1994,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           IconButton(
             tooltip: 'Move earlier',
             icon: const Icon(Icons.arrow_back),
-            onPressed: index == 0 || item.uploading
-                ? null
-                : () => setState(() => _pendingMedia.insert(
-                    index - 1, _pendingMedia.removeAt(index))),
+            onPressed:
+                index == 0 || item.uploading ? null : () => _moveEarlier(item),
           ),
           if (item.failed)
             IconButton(
@@ -1833,7 +2006,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           IconButton(
             tooltip: 'Remove',
             icon: const Icon(Icons.close),
-            onPressed: () => setState(() => _pendingMedia.removeAt(index)),
+            onPressed: item.uploading ? null : () => _removeMedia(item),
           ),
         ]),
       ),
@@ -1844,7 +2017,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
   Widget _reviewStep() {
     final attrs = _buildAttributes();
-    final photoCount = _pendingMedia.length + _serverMediaKeys.length;
+    final photoCount = _pendingMedia.length;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
       children: [

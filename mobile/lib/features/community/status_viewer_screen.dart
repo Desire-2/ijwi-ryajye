@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/media/media_widgets.dart';
 import '../../core/network/api_client.dart';
 import '../../core/theme/design_system.dart';
 import '../../shared/widgets/ui.dart';
@@ -13,8 +14,7 @@ class StatusViewerScreen extends ConsumerStatefulWidget {
   const StatusViewerScreen({super.key});
 
   @override
-  ConsumerState<StatusViewerScreen> createState() =>
-      _StatusViewerScreenState();
+  ConsumerState<StatusViewerScreen> createState() => _StatusViewerScreenState();
 }
 
 class _StatusViewerScreenState extends ConsumerState<StatusViewerScreen> {
@@ -114,14 +114,17 @@ class _StatusViewerScreenState extends ConsumerState<StatusViewerScreen> {
             IjwiAvatar(s.author.displayName, size: 40),
             const SizedBox(width: 10),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(s.author.displayName,
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w800)),
-                Text('Today',
-                    style: TextStyle(
-                        color: Colors.white.withOpacity(0.7), fontSize: 12)),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(s.author.displayName,
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w800)),
+                    Text('Today',
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 12)),
+                  ]),
             ),
             IconButton(
               onPressed: () => Navigator.pop(context),
@@ -134,19 +137,21 @@ class _StatusViewerScreenState extends ConsumerState<StatusViewerScreen> {
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              if (s.quantityLabel != null &&
-                  s.quantityLabel!.isNotEmpty)
+              if (s.quantityLabel != null && s.quantityLabel!.isNotEmpty)
                 Text(s.quantityLabel!,
                     style: const TextStyle(
                         color: IjwiColors.amber,
                         fontSize: 18,
                         fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
-              if (s.bodyText != null)
+              if (s.bodyText != null && s.bodyText!.isNotEmpty) ...[
                 Text(s.bodyText ?? '',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                         color: Colors.white, fontSize: 20, height: 1.4)),
+                const SizedBox(height: 12),
+              ],
+              if (s.media.isNotEmpty) _mediaGrid(s),
             ]),
           ),
         ),
@@ -170,5 +175,32 @@ class _StatusViewerScreenState extends ConsumerState<StatusViewerScreen> {
           ),
       ]),
     );
+  }
+
+  Widget _mediaGrid(StatusData s) {
+    if (s.media.isEmpty) return const SizedBox.shrink();
+    final single = s.media.length == 1;
+    final frames = s.media.map((m) {
+      return GestureDetector(
+        onTap: single
+            ? () => showFullscreenMediaViewer(context, s.media, initialIndex: 0)
+            : null,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: m.isVideo
+              ? MediaVideoPlayer(remote: m, autoplay: single)
+              : SizedBox(
+                  width: single ? 220 : 104,
+                  height: single ? 220 : 104,
+                  child: IjwiImage(url: m.url, fit: BoxFit.cover),
+                ),
+        ),
+      );
+    }).toList();
+    return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        alignment: WrapAlignment.center,
+        children: frames);
   }
 }

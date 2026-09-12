@@ -138,5 +138,12 @@
   "market_no_offers": "Hakuna ofa bado",
   "market_no_orders": "Hakuna maagizo",
   "market_no_favorites": "Hakuna bidhaa zilizohifadhiwa",
-  "market_no_results": "Hakuna matokeo"
+  "market_no_results": "Hakuna matokeo",
+  "add_media": "Ongeza media",
+  "camera": "Kamera",
+  "gallery": "Ghala la picha",
+  "video": "Video",
+  "document": "Hati",
+  "voice": "Sauti",
+  "share_product": "Shiriki bidhaa"
 }

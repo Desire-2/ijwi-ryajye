@@ -165,6 +165,7 @@ def article_detail(article_id):
 @jwt_required()
 def report_voice():
     from app.models.intelligence import FarmerVoiceReport
+    from app.services import media_service
 
     user = get_current_user()
     data = parse_body(type("S", (ma.Schema,), {
@@ -172,12 +173,24 @@ def report_voice():
         "message_text": ma.fields.String(missing=""),
         "media_keys": ma.fields.List(ma.fields.String()),
     })())
-    report = FarmerVoiceReport(user_id=user.id, report_type=data["report_type"],
-                               message_text=data.get("message_text", ""),
-                               media_keys=data.get("media_keys"))
+    report = FarmerVoiceReport(
+        reporter_id=user.id,
+        topic=data["report_type"],
+        body_text=data.get("message_text", ""),
+    )
     db.session.add(report)
+    db.session.flush()
+    for key in [k for k in (data.get("media_keys") or []) if k]:
+        asset = media_service.find_asset_by_key(key)
+        if asset is not None and asset.owner_id == user.id:
+            try:
+                media_service.attach_asset(user, asset.id, "POST", report.id)
+            except Exception:
+                db.session.rollback()
     db.session.commit()
-    return {"report": report.to_dict()}, 201
+    out = report.to_dict()
+    out["media"] = media_service.resolve_keys(user, data.get("media_keys") or [])
+    return {"report": out}, 201
 
 
 @jwt_required()

@@ -42,9 +42,14 @@ def list_conversations():
 
 class StartConversationSchema(ma.Schema):
     with_user_id = ma.fields.String(required=True)
-    context = ma.fields.String(missing="DIRECT", validate=ma.validate.OneOf(["DIRECT", "MARKETPLACE", "SUPPORT"]))
+    context = ma.fields.String(missing="DIRECT", validate=ma.validate.OneOf(
+        ["DIRECT", "MARKETPLACE", "SUPPORT", "listing", "marketplace", "direct"]))
     listing_id = ma.fields.String()
     order_id = ma.fields.String()
+
+
+_CONTEXT_ALIASES = {"listing": "MARKETPLACE", "marketplace": "MARKETPLACE",
+                    "direct": "DIRECT", "support": "SUPPORT"}
 
 
 @jwt_required()
@@ -54,8 +59,10 @@ def start_conversation():
     other = db.session.get(User, data["with_user_id"])
     if other is None:
         raise not_found("User not found")
+    context = _CONTEXT_ALIASES.get(data["context"], data["context"].upper())
     conv = messaging_service.create_direct_conversation(
-        user, other, context_type=data["context"], listing_id=data.get("listing_id"))
+        user, other, context_type=context, listing_id=data.get("listing_id"),
+        order_id=data.get("order_id"))
     db.session.commit()
     return {"conversation": conversation_json(conv)}, 201
 

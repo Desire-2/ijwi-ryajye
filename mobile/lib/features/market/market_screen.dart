@@ -164,7 +164,7 @@ class _MarketScreenState extends ConsumerState<MarketScreen> with MarketRealtime
           ]),
         ),
         SizedBox(
-          height: 96,
+          height: 104,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -183,7 +183,7 @@ class _MarketScreenState extends ConsumerState<MarketScreen> with MarketRealtime
               style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
         ),
         SizedBox(
-          height: 92,
+          height: 100,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -230,7 +230,7 @@ class _MarketScreenState extends ConsumerState<MarketScreen> with MarketRealtime
             actionLabel: 'See all',
             onAction: () => context.push('/market/search', extra: {'browse': true})),
         SizedBox(
-          height: 232,
+          height: 240,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -333,21 +333,25 @@ class _CategoryPill extends StatelessWidget {
       child: Container(
         width: 104,
         padding: const EdgeInsets.all(10),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(IjwiRadius.md),
           border: Border.all(color: const Color(0xFFD7E2DA)),
         ),
-        child: Column(children: [
-          Text(category.icon.isNotEmpty ? category.icon : '🌾',
-              style: const TextStyle(fontSize: 26)),
-          const SizedBox(height: 6),
-          Text(category.name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(category.icon.isNotEmpty ? category.icon : '🌾',
+                style: const TextStyle(fontSize: 26)),
+            const SizedBox(height: 6),
+            Text(category.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
+          ],
+        ),
       ),
     );
   }

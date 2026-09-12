@@ -10,11 +10,13 @@ def register_api(app):
         users as users_api,
         calls,
         commerce,
+        connections,
         dashboard,
         farms,
         groups,
         intelligence,
         marketplace,
+        media,
         messaging,
         opportunities,
         platform,
@@ -68,6 +70,8 @@ def register_api(app):
     add("/api/v1/listings/<listing_id>", view_func=marketplace.patch_listing, methods=["PATCH"])
     add("/api/v1/listings/<listing_id>/publish", view_func=marketplace.publish_listing, methods=["POST"])
     add("/api/v1/listings/<listing_id>/media", view_func=marketplace.add_listing_media, methods=["POST"])
+    add("/api/v1/listings/<listing_id>/media", view_func=marketplace.remove_listing_media, methods=["DELETE"])
+    add("/api/v1/listings/<listing_id>/media/order", view_func=marketplace.reorder_listing_media, methods=["PUT"])
     add("/api/v1/listings/<listing_id>/close", view_func=marketplace.close_listing, methods=["POST"])
     add("/api/v1/listings/<listing_id>/price-advice", view_func=marketplace.listing_price_advisor, methods=["GET"])
     add("/api/v1/price-advice", view_func=marketplace.listing_price_advisor, methods=["GET"])
@@ -192,6 +196,20 @@ def register_api(app):
     add("/api/v1/users/<user_id>/unfollow", view_func=posts.unfollow_user, methods=["POST"])
     add("/api/v1/reports", view_func=posts.report_content, methods=["POST"])
 
+    # ---- Connections / block / people discovery ----
+    add("/api/v1/users/<user_id>/connect", view_func=connections.request_connection, methods=["POST"])
+    add("/api/v1/users/<user_id>/block", view_func=connections.block_user, methods=["POST"])
+    add("/api/v1/users/<user_id>/unblock", view_func=connections.unblock_user, methods=["POST"])
+    add("/api/v1/connections", view_func=connections.list_connections, methods=["GET"])
+    add("/api/v1/connections/pending", view_func=connections.pending_requests, methods=["GET"])
+    add("/api/v1/connections/recommended", view_func=connections.recommended, methods=["GET"])
+    add("/api/v1/connections/nearby", view_func=connections.nearby, methods=["GET"])
+    add("/api/v1/connections/blocked", view_func=connections.blocked_list, methods=["GET"])
+    add("/api/v1/connections/<connection_id>/accept", view_func=connections.accept_connection, methods=["POST"])
+    add("/api/v1/connections/<connection_id>/decline", view_func=connections.decline_connection, methods=["POST"])
+    add("/api/v1/connections/<connection_id>/cancel", view_func=connections.cancel_connection, methods=["POST"])
+    add("/api/v1/connections/<user_id>", view_func=connections.remove_connection, methods=["DELETE"])
+
     # ---- Status / polls / events ----
     add("/api/v1/statuses", view_func=social_features.create_status, methods=["POST"])
     add("/api/v1/statuses", view_func=social_features.list_statuses, methods=["GET"])
@@ -270,6 +288,16 @@ def register_api(app):
     add("/api/v1/sync/push", view_func=platform.sync_push, methods=["POST"])
     add("/api/v1/sync/pull", view_func=platform.sync_pull, methods=["GET"])
     add("/api/v1/uploads/<category>", view_func=platform.upload_file, methods=["POST"])
+
+    # ---- Media backbone (single source for every upload in the app) ----
+    add("/api/v1/media/upload", view_func=media.upload_media, methods=["POST"])
+    add("/api/v1/media/cleanup", view_func=media.cleanup_media, methods=["POST"])
+    add("/api/v1/media/serve/<path:storage_key>", view_func=media.serve_media, methods=["GET"])
+    add("/api/v1/media/<asset_id>", view_func=media.get_asset, methods=["GET"])
+    add("/api/v1/media/<asset_id>", view_func=media.delete_media, methods=["DELETE"])
+    add("/api/v1/media/<asset_id>/file", view_func=media.get_asset_file, methods=["GET"])
+    add("/api/v1/media/<asset_id>/thumbnail", view_func=media.get_asset_thumbnail, methods=["GET"])
+    add("/api/v1/media/<asset_id>/attach", view_func=media.attach_media, methods=["POST"])
 
     # ---- Seller dashboard ----
     add("/api/v1/seller/dashboard", view_func=dashboard.seller_dashboard, methods=["GET"])

@@ -27,6 +27,15 @@ from app.services.notification_service import notify
 from app.services.security import assert_not_blocked_between
 
 
+def _find_media(storage_key):
+    """Resolve a stored media asset so message attachments can carry
+    width/height/thumbnail without a second round trip."""
+    if not storage_key:
+        return None
+    from app.models.media import MediaAsset
+    return MediaAsset.query.filter_by(storage_key=storage_key, deleted_at=None).first()
+
+
 def get_conversation_or_404(conversation_id):
     conv = db.session.get(Conversation, conversation_id)
     if conv is None:
@@ -178,6 +187,7 @@ def send_message(sender, conversation_id, payload):
     db.session.flush()
 
     for att in payload.get("attachments", []):
+        media_asset = _find_media(att.get("storage_key", ""))
         db.session.add(
             MessageAttachment(
                 message_id=message.id,
@@ -187,6 +197,9 @@ def send_message(sender, conversation_id, payload):
                 mime_type=att.get("mime_type", ""),
                 size_bytes=int(att.get("size_bytes", 0)),
                 duration_ms=int(att.get("duration_ms", 0)),
+                width=media_asset.width if media_asset else None,
+                height=media_asset.height if media_asset else None,
+                thumbnail_key=media_asset.thumbnail_key if media_asset else None,
             )
         )
 
@@ -217,6 +230,8 @@ def send_message(sender, conversation_id, payload):
 
 
 def _serialize(message, include_members=False):
+    from flask import request
+
     data = {
         "id": message.id,
         "conversation_id": message.conversation_id,
@@ -236,6 +251,12 @@ def _serialize(message, include_members=False):
                 "file_name": a.file_name,
                 "size_bytes": a.size_bytes,
                 "duration_ms": a.duration_ms,
+                "mime_type": a.mime_type,
+                "width": a.width,
+                "height": a.height,
+                "thumbnail_key": a.thumbnail_key,
+                "url": f"{request.host_url}media/serve/{a.storage_key}",
+                "thumbnail_url": a.thumbnail_key and f"{request.host_url}media/serve/{a.thumbnail_key}" or None,
             }
             for a in message.attachments
         ],

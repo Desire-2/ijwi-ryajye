@@ -12,6 +12,7 @@ class AppUser {
     required this.fullName,
     this.primaryRole = 'FARMER',
     this.username,
+    this.profilePhotoUrl,
   });
 
   final String id;
@@ -19,6 +20,10 @@ class AppUser {
   final String fullName;
   final String primaryRole;
   final String? username;
+
+  /// Backend-relative media URL (e.g. `media/serve/<key>`); resolve with
+  /// `MediaRepository.resolveUrl` before displaying.
+  final String? profilePhotoUrl;
 
   bool get isFarmer => primaryRole == 'FARMER';
   bool get isBuyer => primaryRole == 'BUYER';
@@ -30,6 +35,7 @@ class AppUser {
         fullName: j['full_name'] as String? ?? '',
         primaryRole: j['primary_role'] as String? ?? 'FARMER',
         username: j['username'] as String?,
+        profilePhotoUrl: j['profile_photo_url'] as String?,
       );
 }
 
@@ -63,14 +69,26 @@ class AuthController extends StateNotifier<AsyncValue<AppUser?>> {
     }
   }
 
-  Future<void> _cacheUser(AppUser user) =>
-      _tokens.writeUserJson(jsonEncode({
+  Future<void> _cacheUser(AppUser user) => _tokens.writeUserJson(jsonEncode({
         'id': user.id,
         'phone': user.phone,
         'full_name': user.fullName,
         'primary_role': user.primaryRole,
         if (user.username != null) 'username': user.username,
+        if (user.profilePhotoUrl != null)
+          'profile_photo_url': user.profilePhotoUrl,
       }));
+
+  /// Uploaded a new photo already; attach it to the profile via the shared
+  /// media URL and refresh the cached user.
+  Future<void> updateProfilePhoto(String storageKey) async {
+    final res = await _api.patchJson('/users/me', {
+      'profile_photo_key': storageKey,
+    });
+    final user = AppUser.fromJson((res['user'] ?? res) as Map<String, dynamic>);
+    state = AsyncValue.data(user);
+    await _cacheUser(user);
+  }
 
   /// Role chosen during onboarding; consumed as the default in RegisterScreen.
   String preferredRole = 'FARMER';
@@ -86,7 +104,7 @@ class AuthController extends StateNotifier<AsyncValue<AppUser?>> {
     required String username,
     required String password,
     String role = 'FARMER',
-    }) async {
+  }) async {
     await _api.postJson('/auth/register', {
       'phone': phone,
       'full_name': fullName,
@@ -97,13 +115,13 @@ class AuthController extends StateNotifier<AsyncValue<AppUser?>> {
     return null; // OTP sent; UI moves to verification
   }
 
-  Future<AppUser> verifyOtp({required String phone, required String code}) async {
-    final res = await _api.postJson(
-        '/auth/otp/verify', {'phone': phone, 'code': code});
+  Future<AppUser> verifyOtp(
+      {required String phone, required String code}) async {
+    final res =
+        await _api.postJson('/auth/otp/verify', {'phone': phone, 'code': code});
     final verified = res['verified'] == true;
     if (!verified) throw Exception('Invalid code');
-    final tokens =
-        (res['tokens'] as Map<String, dynamic>);
+    final tokens = (res['tokens'] as Map<String, dynamic>);
     await _tokens.write(
       access: tokens['access_token'] as String,
       refresh: tokens['refresh_token'] as String,
@@ -114,7 +132,8 @@ class AuthController extends StateNotifier<AsyncValue<AppUser?>> {
     return user;
   }
 
-  Future<AppUser> login({required String phone, required String password}) async {
+  Future<AppUser> login(
+      {required String phone, required String password}) async {
     final res = await _api.postJson('/auth/login', {
       'phone': phone,
       'password': password,
@@ -138,6 +157,7 @@ class AuthController extends StateNotifier<AsyncValue<AppUser?>> {
   }
 }
 
-final authProvider = StateNotifierProvider<AuthController, AsyncValue<AppUser?>>(
-    (ref) => AuthController(ref.watch(tokenStoreProvider),
-        ref.watch(apiClientProvider)));
+final authProvider =
+    StateNotifierProvider<AuthController, AsyncValue<AppUser?>>((ref) =>
+        AuthController(
+            ref.watch(tokenStoreProvider), ref.watch(apiClientProvider)));

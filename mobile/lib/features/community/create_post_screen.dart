@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/media/media_models.dart';
+import '../../core/media/media_picker.dart';
+import '../../core/media/media_upload_queue.dart';
+import '../../core/media/media_widgets.dart';
 import '../../core/network/api_client.dart';
 import '../../core/theme/design_system.dart';
-import '../../shared/widgets/ui.dart';
-import 'community_models.dart';
 import 'community_service.dart';
 import 'community_widgets.dart';
 
@@ -36,6 +38,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   late String _type = widget.initialType;
   bool _publishing = false;
 
+  final List<LocalMediaItem> _media = [];
+
   @override
   void initState() {
     super.initState();
@@ -56,9 +60,67 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     super.dispose();
   }
 
+  Future<void> _pickMedia() async {
+    final action = await showMediaPickerSheet(context, actions: const [
+      MediaPickAction.camera,
+      MediaPickAction.gallery,
+      MediaPickAction.video,
+      MediaPickAction.document,
+    ]);
+    if (action == null || !mounted) return;
+    final picker = ref.read(mediaPickerProvider);
+    List<LocalMediaItem>? picked;
+    switch (action) {
+      case MediaPickAction.camera:
+        final perm = await ref.read(mediaPermissionsProvider).camera();
+        if (perm != PermissionState.granted) break;
+        final photo = await picker.takePhoto();
+        if (photo != null) picked = [photo];
+      case MediaPickAction.gallery:
+        picked = await picker.pickImages(limit: 5);
+      case MediaPickAction.video:
+        final v = await picker.pickVideo();
+        if (v != null) picked = [v];
+      case MediaPickAction.document:
+        picked = await picker.pickDocuments(limit: 3);
+      case MediaPickAction.shareListing:
+        break;
+      case MediaPickAction.voice:
+        break;
+    }
+    if (picked != null && picked.isNotEmpty) {
+      setState(() => _media.addAll(picked!));
+      ref.read(mediaUploadQueueProvider.notifier).enqueue(picked);
+    }
+  }
+
+  /// Waits for every selected media item to finish uploading and returns
+  /// their storage keys in selection order.
+  Future<List<String>> _uploadedKeys() async {
+    final ids = _media.map((e) => e.id).toList();
+    final deadline = DateTime.now().add(const Duration(seconds: 25));
+    while (DateTime.now().isBefore(deadline)) {
+      final tasks = ref.read(mediaUploadQueueProvider);
+      final ready = ids
+          .every((id) => tasks.any((t) => t.localId == id && t.result != null));
+      if (ready) break;
+      await Future.delayed(const Duration(milliseconds: 250));
+      if (!mounted) return [];
+    }
+    final keys = <String>[];
+    for (final id in ids) {
+      final t = ref
+          .read(mediaUploadQueueProvider)
+          .where((x) => x.localId == id)
+          .firstOrNull;
+      if (t?.result != null) keys.add(t!.result!.storageKey);
+    }
+    return keys;
+  }
+
   Future<void> _publish() async {
     final body = _bodyCtl.text.trim();
-    if (body.isEmpty && _type != 'poll') {
+    if (body.isEmpty && _media.isEmpty && _type != 'poll') {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Write something to post')));
       return;
@@ -66,6 +128,17 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     setState(() => _publishing = true);
     final svc = ref.read(communityServiceProvider);
     try {
+      final mediaKeys =
+          _media.isEmpty ? const <String>[] : await _uploadedKeys();
+      if (_media.isNotEmpty && mediaKeys.length < _media.length) {
+        if (mounted) {
+          setState(() => _publishing = false);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content:
+                  Text('Some media is still uploading. Retry when online.')));
+        }
+        return;
+      }
       final topics = _topicCtl.text
           .split(',')
           .map((t) => t.trim())
@@ -75,12 +148,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         postType: _type,
         title: _titleCtl.text.trim(),
         bodyText: body,
+        mediaKeys: mediaKeys,
         groupId: widget.groupId,
         communityId: widget.communityId,
         topicTags: topics,
-        location: _locationCtl.text.trim().isEmpty
-            ? null
-            : _locationCtl.text.trim(),
+        location:
+            _locationCtl.text.trim().isEmpty ? null : _locationCtl.text.trim(),
       );
       CommunityServiceProvider.pendingDraft = null;
       if (mounted) {
@@ -91,8 +164,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _publishing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(ApiClient.errorMessage(e))));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
       }
     }
   }
@@ -106,7 +179,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           TextButton(
             onPressed: _publishing ? null : _publish,
             child: const Text('Post',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -150,6 +224,28 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               prefixIcon: Icon(Icons.place_outlined, color: IjwiColors.muted),
             ),
           ),
+          if (_media.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text('Media',
+                style: TextStyle(
+                    color: IjwiColors.muted, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            MediaGridEditor(
+              items: _media,
+              onRemove: (item) {
+                setState(() => _media.removeWhere((e) => e.id == item.id));
+                ref.read(mediaUploadQueueProvider.notifier).remove(item.id);
+              },
+              onAdd: _pickMedia,
+            ),
+          ] else ...[
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _pickMedia,
+              icon: const Icon(Icons.add_photo_alternate_outlined),
+              label: const Text('Add photos or files'),
+            ),
+          ],
           if (_type == 'harvest') _harvestBridge(),
         ],
       ),
@@ -189,8 +285,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         leading: const Icon(Icons.storefront_outlined, color: IjwiColors.green),
         title: const Text('Also list this harvest?',
             style: TextStyle(fontWeight: FontWeight.w700)),
-        subtitle:
-            const Text('Create a marketplace listing to reach buyers'),
+        subtitle: const Text('Create a marketplace listing to reach buyers'),
         trailing: OutlinedButton(
           style: OutlinedButton.styleFrom(minimumSize: const Size(90, 36)),
           onPressed: () => context.push('/sell/new'),

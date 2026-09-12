@@ -101,8 +101,7 @@ class Listing {
             (j['product'] as Map<String, dynamic>?)?['emoji'] as String? ??
                 '🌱',
         description = j['description'] as String? ?? '',
-        attributes =
-            (j['attributes'] as Map<String, dynamic>?) ?? const {},
+        attributes = (j['attributes'] as Map<String, dynamic>?) ?? const {},
         variety = j['variety'] as String? ?? '',
         quantityValue = (j['quantity_value'] as num?)?.toDouble() ?? 0,
         availableQuantity = (j['available_quantity'] as num?)?.toDouble() ?? 0,
@@ -166,7 +165,8 @@ class Listing {
   final String? createdAt;
   final Map<String, dynamic>? sellerJson;
 
-  late final SellerCard? seller = sellerJson == null ? null : SellerCard.fromJson(sellerJson!);
+  late final SellerCard? seller =
+      sellerJson == null ? null : SellerCard.fromJson(sellerJson!);
 
   bool get isAuction => listingType == 'AUCTION';
   bool get isNegotiable => negotiable || listingType == 'NEGOTIABLE';
@@ -191,10 +191,12 @@ class ListingMedia {
   ListingMedia.fromJson(Map<String, dynamic> j)
       : type = j['type'] as String? ?? 'image',
         storageKey = j['storage_key'] as String? ?? '',
+        url = j['url'] as String?,
         caption = j['caption'] as String? ?? '';
 
   final String type;
   final String storageKey;
+  final String? url;
   final String caption;
 }
 
@@ -307,7 +309,9 @@ class BuyerRequest {
 
   String get destinationLabel {
     if (destinationRegion == null && destinationDistrict == null) return '';
-    return [destinationDistrict, destinationRegion].whereType<String>().join(', ');
+    return [destinationDistrict, destinationRegion]
+        .whereType<String>()
+        .join(', ');
   }
 }
 
@@ -377,7 +381,8 @@ class OrderJson {
   final List<OrderEventJson> events;
 
   bool get needsPayment => state == 'PAYMENT_PENDING';
-  int get deliveryFeeMinor => 0; // delivery is quoted/logistics, not part of order totals
+  int get deliveryFeeMinor =>
+      0; // delivery is quoted/logistics, not part of order totals
 }
 
 class OrderEventJson {
@@ -399,9 +404,8 @@ class RequestMatch {
       : listingId = j['listing_id'] as String?,
         sellerId = j['seller_id'] as String?,
         matchScore = (j['match_score'] as num?)?.toInt() ?? 0,
-        reasons = ((j['reasons'] as List?) ?? const [])
-            .whereType<String>()
-            .toList();
+        reasons =
+            ((j['reasons'] as List?) ?? const []).whereType<String>().toList();
 
   final String? listingId;
   final String? sellerId;
@@ -425,7 +429,8 @@ class Opportunity {
         destinationRegion = j['destination_region'] as String?,
         requiredByDate = j['required_by_date'] as String?,
         youQualify = (j['you_qualify'] as bool?) ?? false,
-        yourAvailableQuantity = (j['your_available_quantity'] as num?)?.toDouble(),
+        yourAvailableQuantity =
+            (j['your_available_quantity'] as num?)?.toDouble(),
         why = ((j['why'] as List?) ?? const []).whereType<String>().toList();
 
   final String? buyerRequestId;
@@ -454,8 +459,7 @@ class MarketPriceRow {
         lowMinor = (j['price_low_minor'] as num?)?.toInt(),
         midMinor = (j['price_mid_minor'] as num?)?.toInt(),
         highMinor = (j['price_high_minor'] as num?)?.toInt(),
-        sourceName =
-            (j['source'] as Map<String, dynamic>?)?['name'] as String?;
+        sourceName = (j['source'] as Map<String, dynamic>?)?['name'] as String?;
 
   final String productName;
   final String? region;
@@ -579,10 +583,8 @@ class ReputationSummary {
         ratingCount = (j['rating_count'] as num?)?.toInt() ?? 0,
         completedTransactions =
             (j['completed_transactions'] as num?)?.toInt() ?? 0,
-        completedPurchases =
-            (j['completed_purchases'] as num?)?.toInt() ?? 0,
-        completedDeliveries =
-            (j['completed_deliveries'] as num?)?.toInt() ?? 0;
+        completedPurchases = (j['completed_purchases'] as num?)?.toInt() ?? 0,
+        completedDeliveries = (j['completed_deliveries'] as num?)?.toInt() ?? 0;
 
   final String tier;
   final int score;
@@ -605,10 +607,10 @@ class UserReview {
         comment = j['comment'] as String? ?? '',
         verifiedTransaction = (j['verified_transaction'] as bool?) ?? false,
         createdAt = j['created_at'] as String?,
-        reviewerName =
-            (j['reviewer'] as Map<String, dynamic>?)?['full_name'] as String? ??
-                (j['reviewer'] as Map<String, dynamic>?)?['username'] as String? ??
-                'Buyer',
+        reviewerName = (j['reviewer'] as Map<String, dynamic>?)?['full_name']
+                as String? ??
+            (j['reviewer'] as Map<String, dynamic>?)?['username'] as String? ??
+            'Buyer',
         orderNumber =
             (j['order'] as Map<String, dynamic>?)?['order_number'] as String?,
         orderQuantity =
@@ -709,7 +711,8 @@ class DashboardListingRow {
         title = j['title'] as String? ?? '',
         state = j['state'] as String? ?? 'ACTIVE',
         listingType = j['listing_type'] as String? ?? 'FIXED_PRICE',
-        emoji = (j['product'] as Map<String, dynamic>?)?['emoji'] as String? ?? '🌱',
+        emoji = (j['product'] as Map<String, dynamic>?)?['emoji'] as String? ??
+            '🌱',
         priceMinor = (j['price_minor'] as num?)?.toInt() ?? 0,
         currencyCode = j['currency_code'] as String? ?? 'RWF',
         unitCode = j['unit_code'] as String? ?? 'kg',

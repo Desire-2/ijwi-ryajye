@@ -11,6 +11,11 @@ def create_poll(creator, payload):
     if len(options) < 2:
         raise bad_request("Polls require at least two options")
 
+    if payload.get("group_id"):
+        from app.services.group_service import require_group_permission
+
+        require_group_permission(payload["group_id"], creator, "can_create_polls")
+
     poll = Poll(
         group_id=payload.get("group_id"),
         community_id=payload.get("community_id"),
@@ -27,10 +32,9 @@ def create_poll(creator, payload):
     for i, label in enumerate(options):
         db.session.add(PollOption(poll_id=poll.id, label=label[:255], position=i))
 
-    if poll.group_id:
-        from app.services.group_service import require_group_permission
-
-        require_group_permission(poll.group_id, creator, "can_create_polls")
+    _ensure_feed_post(creator.id, "poll", poll.question, entity_type="poll",
+                      entity_id=poll.id, community_id=poll.community_id,
+                      group_id=poll.group_id)
 
     if poll.conversation_id:
         from app.services.messaging_service import send_message
@@ -46,6 +50,28 @@ def create_poll(creator, payload):
 
     _broadcast_poll(poll)
     return poll
+
+
+def _ensure_feed_post(author_id, post_type, text, entity_type=None, entity_id=None,
+                      community_id=None, group_id=None, title=""):
+    """Mirror structured social entities into the unified feed Post model so
+    polls/events appear in the same feed and deep-link back to their entity."""
+    from app.models.posts import Post
+
+    post = Post(
+        author_id=author_id,
+        post_type=post_type,
+        title=title or text[:120],
+        body_text=text,
+        community_id=community_id,
+        group_id=group_id,
+        entity_ref_type=entity_type,
+        entity_ref_id=entity_id,
+        audience="PUBLIC",
+    )
+    db.session.add(post)
+    db.session.flush()
+    return post
 
 
 def vote(user, poll_id, option_ids):
@@ -103,6 +129,10 @@ def close_poll(actor, poll_id):
 
 
 def poll_results(poll):
+    if isinstance(poll, str):
+        poll = db.session.get(Poll, poll)
+        if poll is None:
+            raise not_found("Poll not found")
     total = sum(o.vote_count for o in poll.options)
     return {
         "poll_id": poll.id,
@@ -150,6 +180,10 @@ def create_event(organizer, payload):
     )
     db.session.add(event)
     db.session.flush()
+
+    _ensure_feed_post(organizer.id, "event", event.title, entity_type="event",
+                      entity_id=event.id, community_id=event.community_id,
+                      group_id=event.group_id, title=event.title)
 
     if event.group_id:
         from app.services.messaging_service import send_message

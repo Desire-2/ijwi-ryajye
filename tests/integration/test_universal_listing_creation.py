@@ -122,6 +122,48 @@ def test_invalid_attributes_and_quantity_rejected(client, farmer):
     assert r.status_code == 400
 
 
+def test_remove_and_reorder_listing_media(client, farmer, buyer):
+    headers = auth_headers(farmer)
+    listing = _draft_listing(client, farmer, slug="cattle")
+
+    # Attach three photos in order.
+    r = client.post(f"/api/v1/listings/{listing['id']}/media", json={
+        "media": [
+            {"storage_key": "images/me/a.jpg"},
+            {"storage_key": "images/me/b.jpg"},
+            {"storage_key": "images/me/c.jpg"},
+        ]}, headers=headers)
+    assert r.status_code == 200 and r.get_json()["added"] == 3, r.get_json()
+
+    def _keys():
+        d = client.get(f"/api/v1/listings/{listing['id']}", headers=headers)
+        return [m["storage_key"] for m in d.get_json()["listing"]["media"]]
+
+    assert _keys() == ["images/me/a.jpg", "images/me/b.jpg", "images/me/c.jpg"]
+
+    # Reorder: the first photo is the cover.
+    r = client.put(f"/api/v1/listings/{listing['id']}/media/order", json={
+        "storage_keys": ["images/me/c.jpg", "images/me/a.jpg", "images/me/b.jpg"]},
+        headers=headers)
+    assert r.status_code == 200 and r.get_json()["ordered"] == 3, r.get_json()
+    assert _keys() == ["images/me/c.jpg", "images/me/a.jpg", "images/me/b.jpg"]
+
+    # Removing one photo reindexes the remaining positions.
+    r = client.delete(f"/api/v1/listings/{listing['id']}/media", json={
+        "storage_keys": ["images/me/a.jpg"]}, headers=headers)
+    assert r.status_code == 200 and r.get_json()["removed"] == 1, r.get_json()
+    assert _keys() == ["images/me/c.jpg", "images/me/b.jpg"]
+
+    # Ownership is enforced on both operations.
+    r = client.delete(f"/api/v1/listings/{listing['id']}/media", json={
+        "storage_keys": ["images/me/c.jpg"]}, headers=auth_headers(buyer))
+    assert r.status_code == 403, r.get_json()
+    r = client.put(f"/api/v1/listings/{listing['id']}/media/order", json={
+        "storage_keys": ["images/me/c.jpg", "images/me/b.jpg"]},
+        headers=auth_headers(buyer))
+    assert r.status_code == 403, r.get_json()
+
+
 def test_publish_requires_ownership(client, buyer, farmer):
     listing = _draft_listing(client, farmer)
     r = client.post(f"/api/v1/listings/{listing['id']}/publish",

@@ -40,6 +40,18 @@ def get_farmer(farmer_id):
     viewer = get_current_user()
     is_self = viewer and viewer.id == user.id
     card["story"] = profile.story if (profile and is_self) else None
+    if viewer and not is_self:
+        from app.services.connection_service import connection_status_between
+        from app.services.post_service import is_following
+        from app.models.identity import BlockedUser
+
+        card["connection_status"] = connection_status_between(viewer.id, user.id)
+        card["is_following"] = is_following(viewer.id, user.id)
+        card["follows_me"] = is_following(user.id, viewer.id)
+        card["i_have_blocked"] = BlockedUser.query.filter_by(
+            blocker_id=viewer.id, blocked_id=user.id).first() is not None
+        card["blocked_me"] = BlockedUser.query.filter_by(
+            blocker_id=user.id, blocked_id=viewer.id).first() is not None
     return card
 
 
@@ -55,6 +67,7 @@ class PatchMeSchema(ma.Schema):
     transcription_opt_in = ma.fields.Boolean()
     translation_pref = ma.fields.String(validate=ma.validate.OneOf(["en", "rw", "fr", "sw"]))
     story = ma.fields.String()
+    profile_photo_key = ma.fields.String(validate=ma.validate.Length(max=500))
     years_experience = ma.fields.Integer()
     main_crops = ma.fields.List(ma.fields.String())
     certifications = ma.fields.List(ma.fields.String())
@@ -67,7 +80,7 @@ def patch_me():
 
     for field in ("full_name", "district", "languages", "visibility_phone",
                   "visibility_location_exact", "visibility_farm_details", "data_saver",
-                  "transcription_opt_in", "translation_pref"):
+                  "transcription_opt_in", "translation_pref", "profile_photo_key"):
         if field in data:
             setattr(user, field, data[field])
     if "bio_region" in data:

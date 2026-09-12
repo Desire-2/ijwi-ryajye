@@ -91,8 +91,36 @@ class EventReminder(BaseModel):
 
 
 class Follow(BaseModel):
+    # Legacy orphaned table. All new code writes to UserFollow in app.models.posts.
     __tablename__ = "follows"
     __table_args__ = (UniqueConstraint("follower_id", "followed_id", name="uq_follow_pair"),)
 
     follower_id = db.Column(db.String(32), ForeignKey("users.id"), nullable=False, index=True)
     followed_id = db.Column(db.String(32), ForeignKey("users.id"), nullable=False, index=True)
+
+
+CONNECTION_STATUSES = ["PENDING", "ACCEPTED", "DECLINED"]
+
+
+class Connection(BaseModel):
+    """Mutual connection layer (the social graph for recommendations and chat).
+
+    The pair is always stored normalized (lower id first) so a unique constraint
+    guarantees at most one relationship per user pair.
+    """
+
+    __tablename__ = "connections"
+    __table_args__ = (
+        UniqueConstraint("user_a_id", "user_b_id", name="uq_connection_pair"),
+        Index("ix_connections_user_a", "user_a_id", "status"),
+        Index("ix_connections_user_b", "user_b_id", "status"),
+    )
+
+    user_a_id = db.Column(db.String(32), ForeignKey("users.id"), nullable=False, index=True)
+    user_b_id = db.Column(db.String(32), ForeignKey("users.id"), nullable=False, index=True)
+    status = db.Column(db.String(10), default="PENDING", nullable=False)
+    requested_by = db.Column(db.String(32), ForeignKey("users.id"), nullable=False)
+    responded_at = db.Column(db.DateTime(timezone=True))
+
+    def other_id(self, user_id):
+        return self.user_b_id if user_id == self.user_a_id else self.user_a_id

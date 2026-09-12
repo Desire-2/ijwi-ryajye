@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/media/media_models.dart';
+
 /// Community feed entity models mapped 1:1 to the backend API contracts.
 /// These models are the single source of truth for community data in Flutter.
 
@@ -170,8 +172,9 @@ class FarmerIdentity {
   final bool verified;
   final String? specialization;
 
-  String get displayName =>
-      fullName.isNotEmpty ? fullName : (username.isNotEmpty ? username : 'Farmer');
+  String get displayName => fullName.isNotEmpty
+      ? fullName
+      : (username.isNotEmpty ? username : 'Farmer');
 }
 
 class Post {
@@ -455,6 +458,8 @@ class StatusData {
     required this.statusType,
     this.bodyText,
     this.mediaKey,
+    this.mediaKeys = const [],
+    this.media = const [],
     this.templateKind,
     this.listingId,
     this.productId,
@@ -473,6 +478,14 @@ class StatusData {
       statusType: j['status_type'] as String? ?? 'text',
       bodyText: j['body_text'] as String?,
       mediaKey: j['media_key'] as String?,
+      mediaKeys: j['media_keys'] == null
+          ? const []
+          : List<String>.from((j['media_keys'] as List).whereType<String>()),
+      media: (j['media'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(RemoteMedia.fromJson)
+              .toList() ??
+          const [],
       templateKind: j['template_kind'] as String?,
       listingId: j['listing_id'] as String?,
       productId: j['product_id'] as String?,
@@ -489,6 +502,8 @@ class StatusData {
   final String statusType;
   final String? bodyText;
   final String? mediaKey;
+  final List<String> mediaKeys;
+  final List<RemoteMedia> media;
   final String? templateKind;
   final String? listingId;
   final String? productId;

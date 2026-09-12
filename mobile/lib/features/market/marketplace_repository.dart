@@ -348,6 +348,22 @@ class MarketplaceRepository {
     await _api.postJson('/listings/$listingId/media', {'media': media});
   }
 
+  /// Removes attached photos from a listing (cover order reindexes after).
+  Future<void> removeListingMedia(
+      String listingId, List<String> storageKeys) async {
+    await _api.deleteJson('/listings/$listingId/media', {
+      'storage_keys': storageKeys,
+    });
+  }
+
+  /// Sets the display order (cover first) of a listing's attached photos.
+  Future<void> reorderListingMedia(
+      String listingId, List<String> storageKeys) async {
+    await _api.putJson('/listings/$listingId/media/order', {
+      'storage_keys': storageKeys,
+    });
+  }
+
   /// Posts the listing to the user's Status (backend creates the status).
   Future<void> statusFromListing(String listingId,
       {String caption = ''}) async {

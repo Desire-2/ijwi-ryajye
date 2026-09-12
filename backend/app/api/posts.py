@@ -12,6 +12,7 @@ def create_post():
     user = get_current_user()
     payload = parse_body()
     post = post_service.create_post(user, payload)
+    post_service.db.session.commit()
     return {"post": post_service.serialize_post(post, viewer=user)}, 201
 
 
@@ -42,6 +43,7 @@ def list_posts():
 def post_detail(post_id):
     user = get_current_user()
     post = post_service.get_post(post_id, viewer=user)
+    post_service.db.session.commit()
     return {"post": post_service.serialize_post(post, viewer=user)}
 
 
@@ -50,19 +52,24 @@ def patch_post(post_id):
     user = get_current_user()
     payload = parse_body()
     post = post_service.edit_post(user, post_id, payload)
+    post_service.db.session.commit()
     return {"post": post_service.serialize_post(post, viewer=user)}
 
 
 @jwt_required()
 def delete_post(post_id):
     user = get_current_user()
-    return post_service.delete_post(user, post_id)
+    result = post_service.delete_post(user, post_id)
+    post_service.db.session.commit()
+    return result
 
 
 @jwt_required()
 def pin_post(post_id):
     user = get_current_user()
-    return post_service.pin_post(user, post_id)
+    result = post_service.pin_post(user, post_id)
+    post_service.db.session.commit()
+    return result
 
 
 @jwt_required()
@@ -73,7 +80,9 @@ def mark_best_answer(post_id):
     if not comment_id:
         from app.errors import bad_request
         raise bad_request("comment_id is required")
-    return post_service.mark_best_answer(user, post_id, comment_id)
+    result = post_service.mark_best_answer(user, post_id, comment_id)
+    post_service.db.session.commit()
+    return result
 
 
 @jwt_required()
@@ -102,6 +111,7 @@ def create_comment(post_id):
     user = get_current_user()
     payload = parse_body()
     comment = post_service.add_comment(user, post_id, payload)
+    post_service.db.session.commit()
     return {"comment": post_service.serialize_comment(comment, viewer=user)}, 201
 
 
@@ -126,7 +136,7 @@ def delete_comment(comment_id):
     post = post_service.db.session.get(post_service.Post, comment.post_id)
     if post:
         post.reply_count = max(0, (post.reply_count or 0) - 1)
-    post_service.db.session.flush()
+    post_service.db.session.commit()
     return {"deleted": True}
 
 
@@ -138,7 +148,9 @@ def react_post(post_id):
     if not emoji:
         from app.errors import bad_request
         raise bad_request("emoji is required")
-    return post_service.react_to_post(user, post_id, emoji)
+    result = post_service.react_to_post(user, post_id, emoji)
+    post_service.db.session.commit()
+    return result
 
 
 @jwt_required()
@@ -149,13 +161,17 @@ def react_comment(comment_id):
     if not emoji:
         from app.errors import bad_request
         raise bad_request("emoji is required")
-    return post_service.react_to_comment(user, comment_id, emoji)
+    result = post_service.react_to_comment(user, comment_id, emoji)
+    post_service.db.session.commit()
+    return result
 
 
 @jwt_required()
 def save_post(post_id):
     user = get_current_user()
-    return post_service.save_post(user, post_id)
+    result = post_service.save_post(user, post_id)
+    post_service.db.session.commit()
+    return result
 
 
 @jwt_required()
@@ -169,13 +185,17 @@ def saved_posts():
 @jwt_required()
 def follow_user(user_id):
     user = get_current_user()
-    return post_service.follow_user(user, user_id)
+    result = post_service.follow_user(user, user_id)
+    post_service.db.session.commit()
+    return result
 
 
 @jwt_required()
 def unfollow_user(user_id):
     user = get_current_user()
-    return post_service.follow_user(user, user_id)
+    result = post_service.unfollow_user(user, user_id)
+    post_service.db.session.commit()
+    return result
 
 
 @jwt_required()
@@ -190,4 +210,5 @@ def report_content():
         raise bad_request("subject_type, subject_id and reason are required")
     report = post_service.report_content(user, subject_type, subject_id, reason,
                                           payload.get("details", ""))
+    post_service.db.session.commit()
     return {"report": {"id": report.id, "status": report.status}}, 201

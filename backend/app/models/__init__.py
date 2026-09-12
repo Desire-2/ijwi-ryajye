@@ -45,6 +45,7 @@ from app.models.intelligence import (
     MarketPriceSource, WeatherRecord,
 )
 from app.models.notifications import Notification, NotificationBatch, NotificationPreference
+from app.models.media import MediaAsset
 from app.models.posts import (
     Comment, CommentReaction, ContentReport, Post, PostReaction, PostShare, SavedPost,
     UserFollow,

@@ -45,7 +45,8 @@ class _Filters {
           'quality_grade': qualityGrade,
         if (listingType != null && listingType!.isNotEmpty)
           'listing_type': listingType,
-        if (minQuantity != null && minQuantity! > 0) 'min_quantity': minQuantity,
+        if (minQuantity != null && minQuantity! > 0)
+          'min_quantity': minQuantity,
         'negotiable': negotiable,
         'verified': verified,
       };
@@ -75,13 +76,24 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   // Preserve scroll intent across result reloads.
   final _scroll = ScrollController();
+  bool _extrasRestored = false;
 
   @override
   void initState() {
     super.initState();
     _queryCtl.addListener(_onQueryChanged);
-    _restoreExtras();
     _fetchResults();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // GoRouterState.of(context) resolves inherited widgets, which may not be
+    // looked up from initState — run it here once, on the first build.
+    if (!_extrasRestored) {
+      _extrasRestored = true;
+      _restoreExtras();
+    }
   }
 
   @override
@@ -102,7 +114,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         _filters.category = cat.slug;
         _filters.product = null;
         _queryCtl.text = '';
-        setState(() {});
         return;
       }
       final catSlug = extra['category_slug'];
@@ -121,9 +132,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _debounce = Timer(const Duration(milliseconds: 350), () async {
       final seq = ++_debounceSeq;
       try {
-        final res = await ref
-            .read(marketplaceRepositoryProvider)
-            .search(q);
+        final res = await ref.read(marketplaceRepositoryProvider).search(q);
         if (!mounted || seq != _debounceSeq) return;
         setState(() => _suggestions = res);
       } catch (_) {
@@ -260,20 +269,20 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (confirmed != true) return;
     try {
       await ref.read(marketplaceRepositoryProvider).createSavedSearch(
-            label: labelCtl.text.trim(),
-            query: {
-              'q': _queryCtl.text.trim(),
-              ..._filters.toQuery(),
-            },
-          );
+        label: labelCtl.text.trim(),
+        query: {
+          'q': _queryCtl.text.trim(),
+          ..._filters.toQuery(),
+        },
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Search saved — we’ll notify you on new matches'),
           backgroundColor: IjwiColors.green));
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(ApiClient.errorMessage(e))));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
       }
     }
   }
@@ -316,7 +325,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   const Icon(Icons.search, color: Colors.white, size: 20),
               suffixIcon: _queryCtl.text.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white, size: 18),
+                      icon: const Icon(Icons.close,
+                          color: Colors.white, size: 18),
                       onPressed: () {
                         _queryCtl.clear();
                         _fetchResults();
@@ -355,57 +365,65 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         key: ValueKey('chip-${chipIndex++}'),
         visualDensity: VisualDensity.compact,
         label: Text(label, style: const TextStyle(fontSize: 12)),
-        deleteIcon:
-            const Icon(Icons.close, size: 14, color: IjwiColors.muted),
+        deleteIcon: const Icon(Icons.close, size: 14, color: IjwiColors.muted),
         onDeleted: onRemove,
       ));
     }
 
-    if (f.category != null) addChip('Category', () {
-      _filters.category = null;
-      setState(() {});
-      _fetchResults();
-    });
-    if (f.region != null) addChip(f.region!, () {
-      _filters.region = null;
-      setState(() {});
-      _fetchResults();
-    });
-    if (f.qualityGrade != null) addChip(f.qualityGrade!, () {
-      _filters.qualityGrade = null;
-      setState(() {});
-      _fetchResults();
-    });
-    if (f.listingType != null) addChip(f.listingType!, () {
-      _filters.listingType = null;
-      setState(() {});
-      _fetchResults();
-    });
-    if (f.minPriceMinor != null) addChip('Min ${(f.minPriceMinor! / 100).toStringAsFixed(0)}', () {
-      _filters.minPriceMinor = null;
-      setState(() {});
-      _fetchResults();
-    });
-    if (f.maxPriceMinor != null) addChip('Max ${(f.maxPriceMinor! / 100).toStringAsFixed(0)}', () {
-      _filters.maxPriceMinor = null;
-      setState(() {});
-      _fetchResults();
-    });
-    if (f.minQuantity != null) addChip('≥ ${f.minQuantity} ${'kg'}', () {
-      _filters.minQuantity = null;
-      setState(() {});
-      _fetchResults();
-    });
-    if (f.negotiable) addChip('Negotiable', () {
-      _filters.negotiable = false;
-      setState(() {});
-      _fetchResults();
-    });
-    if (f.verified) addChip('Verified', () {
-      _filters.verified = false;
-      setState(() {});
-      _fetchResults();
-    });
+    if (f.category != null)
+      addChip('Category', () {
+        _filters.category = null;
+        setState(() {});
+        _fetchResults();
+      });
+    if (f.region != null)
+      addChip(f.region!, () {
+        _filters.region = null;
+        setState(() {});
+        _fetchResults();
+      });
+    if (f.qualityGrade != null)
+      addChip(f.qualityGrade!, () {
+        _filters.qualityGrade = null;
+        setState(() {});
+        _fetchResults();
+      });
+    if (f.listingType != null)
+      addChip(f.listingType!, () {
+        _filters.listingType = null;
+        setState(() {});
+        _fetchResults();
+      });
+    if (f.minPriceMinor != null)
+      addChip('Min ${(f.minPriceMinor! / 100).toStringAsFixed(0)}', () {
+        _filters.minPriceMinor = null;
+        setState(() {});
+        _fetchResults();
+      });
+    if (f.maxPriceMinor != null)
+      addChip('Max ${(f.maxPriceMinor! / 100).toStringAsFixed(0)}', () {
+        _filters.maxPriceMinor = null;
+        setState(() {});
+        _fetchResults();
+      });
+    if (f.minQuantity != null)
+      addChip('≥ ${f.minQuantity} ${'kg'}', () {
+        _filters.minQuantity = null;
+        setState(() {});
+        _fetchResults();
+      });
+    if (f.negotiable)
+      addChip('Negotiable', () {
+        _filters.negotiable = false;
+        setState(() {});
+        _fetchResults();
+      });
+    if (f.verified)
+      addChip('Verified', () {
+        _filters.verified = false;
+        setState(() {});
+        _fetchResults();
+      });
 
     return SizedBox(
       height: 52,
@@ -425,7 +443,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   child: Padding(
                     padding: EdgeInsets.only(left: 4),
                     child: Text('Filter results',
-                        style: TextStyle(color: IjwiColors.muted, fontSize: 13)),
+                        style:
+                            TextStyle(color: IjwiColors.muted, fontSize: 13)),
                   ),
                 )
               : ListView(
@@ -443,7 +462,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         TextButton.icon(
           onPressed: _openSort,
           icon: const Icon(Icons.swap_vert, size: 18),
-          label: Text(_sortLabel(f.sort), style: const TextStyle(fontSize: 12.5)),
+          label:
+              Text(_sortLabel(f.sort), style: const TextStyle(fontSize: 12.5)),
         ),
       ]),
     );
@@ -460,16 +480,20 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   Widget _buildResults() {
     final suggestions = _suggestions;
-    if (_queryCtl.text.trim().length >= 2 && suggestions != null &&
-        !_loadingResults && _results == null) {
+    if (_queryCtl.text.trim().length >= 2 &&
+        suggestions != null &&
+        !_loadingResults &&
+        _results == null) {
       return _buildSuggestions(suggestions);
     }
     if (_loadingResults && _results == null) {
       return ListView(
         padding: const EdgeInsets.all(14),
         children: const [
-          Skeleton(height: 84), SizedBox(height: 8),
-          Skeleton(height: 84), SizedBox(height: 8),
+          Skeleton(height: 84),
+          SizedBox(height: 8),
+          Skeleton(height: 84),
+          SizedBox(height: 8),
           Skeleton(height: 84),
         ],
       );
@@ -481,9 +505,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (results == null || results.items.isEmpty) {
       return MarketplaceEmpty(
         icon: _showEmpty ? Icons.search_off : Icons.storefront_outlined,
-        title: _showEmpty
-            ? 'No results'
-            : 'Browse the marketplace',
+        title: _showEmpty ? 'No results' : 'Browse the marketplace',
         message: _showEmpty
             ? 'Try a different product, widen the location, or remove filters.'
             : 'Search for produce, farmers and buyer requests.',
@@ -530,7 +552,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           for (final l in s.listings.take(5))
             ListTile(
               dense: true,
-              leading: Text(l.productEmoji, style: const TextStyle(fontSize: 20)),
+              leading:
+                  Text(l.productEmoji, style: const TextStyle(fontSize: 20)),
               title: Text(l.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -568,8 +591,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               leading: const CircleAvatar(
                 radius: 16,
                 backgroundColor: Color(0xFFE8EEFB),
-                child:
-                    Icon(Icons.groups_2, size: 18, color: IjwiColors.blue),
+                child: Icon(Icons.groups_2, size: 18, color: IjwiColors.blue),
               ),
               title: Text(g.name,
                   style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -600,7 +622,9 @@ class _SuggestionHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: Text(title,
           style: const TextStyle(
-              fontSize: 12, fontWeight: FontWeight.w800, color: IjwiColors.green),
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: IjwiColors.green),
           textAlign: TextAlign.left),
     );
   }
@@ -659,8 +683,8 @@ class _FilterSheetState extends State<_FilterSheet> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 14, 16, 4),
@@ -705,41 +729,56 @@ class _FilterSheetState extends State<_FilterSheet> {
                 TextField(
                   controller: _minQtyCtl,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Min quantity (kg)'),
+                  decoration:
+                      const InputDecoration(labelText: 'Min quantity (kg)'),
                 ),
                 const SizedBox(height: 14),
                 const Text('Quality grade',
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800)),
+                    style:
+                        TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 6,
                   children: [
-                    for (final g in ['UNGRADED', 'STANDARD', 'GRADE_B', 'GRADE_A', 'PREMIUM'])
+                    for (final g in [
+                      'UNGRADED',
+                      'STANDARD',
+                      'GRADE_B',
+                      'GRADE_A',
+                      'PREMIUM'
+                    ])
                       ChoiceChip(
                         visualDensity: VisualDensity.compact,
                         label: Text(g.replaceAll('_', ' '),
                             style: const TextStyle(fontSize: 12)),
                         selected: f.qualityGrade == g,
-                        onSelected: (_) => setState(
-                            () => f.qualityGrade = f.qualityGrade == g ? null : g),
+                        onSelected: (_) => setState(() =>
+                            f.qualityGrade = f.qualityGrade == g ? null : g),
                       ),
                   ],
                 ),
                 const SizedBox(height: 14),
                 const Text('Listing type',
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800)),
+                    style:
+                        TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 6,
                   children: [
-                    for (final t in ['FIXED_PRICE', 'NEGOTIABLE', 'AUCTION', 'FORWARD_CONTRACT', 'GROUP_SALE'])
+                    for (final t in [
+                      'FIXED_PRICE',
+                      'NEGOTIABLE',
+                      'AUCTION',
+                      'FORWARD_CONTRACT',
+                      'GROUP_SALE'
+                    ])
                       ChoiceChip(
                         visualDensity: VisualDensity.compact,
                         label: Text(t.replaceAll('_', ' '),
                             style: const TextStyle(fontSize: 12)),
                         selected: f.listingType == t,
-                        onSelected: (_) => setState(
-                            () => f.listingType = f.listingType == t ? null : t),
+                        onSelected: (_) => setState(() =>
+                            f.listingType = f.listingType == t ? null : t),
                       ),
                   ],
                 ),
@@ -748,7 +787,8 @@ class _FilterSheetState extends State<_FilterSheet> {
                   contentPadding: EdgeInsets.zero,
                   dense: true,
                   title: const Text('Price negotiable',
-                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+                      style: TextStyle(
+                          fontSize: 13.5, fontWeight: FontWeight.w700)),
                   value: f.negotiable,
                   onChanged: (v) => setState(() => f.negotiable = v),
                 ),
@@ -756,7 +796,8 @@ class _FilterSheetState extends State<_FilterSheet> {
                   contentPadding: EdgeInsets.zero,
                   dense: true,
                   title: const Text('Verified sellers only',
-                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+                      style: TextStyle(
+                          fontSize: 13.5, fontWeight: FontWeight.w700)),
                   value: f.verified,
                   onChanged: (v) => setState(() => f.verified = v),
                 ),
@@ -791,14 +832,12 @@ class _FilterSheetState extends State<_FilterSheet> {
   _Filters _buildResult() {
     f
       ..region = _regionCtl.text.trim().isEmpty ? null : _regionCtl.text.trim()
-      ..minPriceMinor =
-          (double.tryParse(_minPriceCtl.text.trim()) ?? 0) <= 0
-              ? null
-              : ((double.tryParse(_minPriceCtl.text.trim()) ?? 0) * 100).round()
-      ..maxPriceMinor =
-          (double.tryParse(_maxPriceCtl.text.trim()) ?? 0) <= 0
-              ? null
-              : ((double.tryParse(_maxPriceCtl.text.trim()) ?? 0) * 100).round()
+      ..minPriceMinor = (double.tryParse(_minPriceCtl.text.trim()) ?? 0) <= 0
+          ? null
+          : ((double.tryParse(_minPriceCtl.text.trim()) ?? 0) * 100).round()
+      ..maxPriceMinor = (double.tryParse(_maxPriceCtl.text.trim()) ?? 0) <= 0
+          ? null
+          : ((double.tryParse(_maxPriceCtl.text.trim()) ?? 0) * 100).round()
       ..minQuantity = (double.tryParse(_minQtyCtl.text.trim()) ?? 0) <= 0
           ? null
           : double.tryParse(_minQtyCtl.text.trim());

@@ -52,8 +52,8 @@ Legend: ✅ WORKING · 🟡 PARTIAL · 🔶 BACKEND-ONLY · 🟥 BROKEN · ⬜ M
 | Catalog products/categories | ✅ | 🟡 (sell wizard only) | 🟡 | – | 🟡 | – | – | ✅ | 🟡 partial |
 | Listings browse | ✅ | 🟡 (flat list) | ✅ | 🟡 | 🟡 | ✅ | – | ✅ | 🟡 partial |
 | Listing create | ✅ | ✅ wizard | ✅ | ✅ emit | ✅ outbox | ✅ | – | ✅ | ✅ |
-| Listing detail | ✅ | 🟡 minimal | ✅ | – | – | ✅ | – | ✅ | 🟡 partial |
-| Listing media | ✅ | ⬜ | ⬜ | – | – | ✅ | – | – | 🔶 backend-only |
+| Listing detail | ✅ | 🟡 + media gallery | ✅ | – | – | ✅ | – | ✅ | 🟡 partial |
+| Listing media | ✅ | ✅ wizard uploads via shared MediaRepository + detail gallery | ✅ | – | 🟡 | ✅ | – | ✅ | ✅ |
 | Listing edit/pause/close | ✅ | 🟡 close only | ✅ | – | – | ✅ | – | ✅ | 🟡 partial |
 | Listing price advisor | ✅ | ⬜ | ⬜ | – | – | ✅ | – | – | 🔶 backend-only |
 | Offers (make/counter/accept/reject/withdraw) | ✅ | 🟡 (accept/reject only) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 🟡 partial |

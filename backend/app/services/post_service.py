@@ -44,6 +44,22 @@ def create_post(author, payload):
     db.session.add(post)
     db.session.flush()
 
+    from app.services import media_service
+
+    for key in [k for k in media.split(",") if k]:
+        asset = None
+        try:
+            from app.models.media import MediaAsset
+
+            asset = MediaAsset.query.filter_by(storage_key=key).first()
+        except Exception:
+            asset = None
+        if asset is not None and asset.owner_id == author.id:
+            try:
+                media_service.attach_asset(author, asset.id, "POST", post.id)
+            except Exception:
+                db.session.rollback()
+
     realtime.emit_to_user(author.id, "post.created", {"post_id": post.id})
     return post
 
@@ -66,9 +82,9 @@ def list_posts(user=None, community_id=None, group_id=None, channel_id=None,
         q = q.filter(Post.topic_tags.ilike(f"%{topic}%"))
 
     if feed_for and user:
-        from app.models.social import Follow
+        from app.models.posts import UserFollow
         from app.models.community import CommunityMember
-        followed_ids = [f.followed_id for f in Follow.query.filter_by(follower_id=user.id).all()]
+        followed_ids = [f.followed_id for f in UserFollow.query.filter_by(follower_id=user.id).all()]
         joined_community_ids = [m.community_id for m in CommunityMember.query.filter_by(user_id=user.id).all()]
         from sqlalchemy import or_
         q = q.filter(or_(
@@ -264,6 +280,7 @@ def list_saved_posts(user, page=1, per_page=20):
 
 
 def follow_user(follower, followed_id):
+    """Idempotently follow a user. Safe to call repeatedly."""
     if follower.id == followed_id:
         raise bad_request("You cannot follow yourself")
     from app.models.identity import User
@@ -272,15 +289,23 @@ def follow_user(follower, followed_id):
         raise not_found("User not found")
     existing = UserFollow.query.filter_by(follower_id=follower.id, followed_id=followed_id).first()
     if existing:
-        db.session.delete(existing)
-        db.session.flush()
-        return {"following": False}
+        return {"following": True}
     db.session.add(UserFollow(follower_id=follower.id, followed_id=followed_id))
     db.session.flush()
     from app.services.notification_service import notify
     notify(followed_id, "MENTION", f"{follower.full_name} started following you",
            subject_type="user", subject_id=follower.id)
     return {"following": True}
+
+
+def unfollow_user(follower, followed_id):
+    """Idempotently remove a follow. Never creates one."""
+    existing = UserFollow.query.filter_by(follower_id=follower.id, followed_id=followed_id).first()
+    if existing is None:
+        return {"following": False}
+    db.session.delete(existing)
+    db.session.flush()
+    return {"following": False}
 
 
 def is_following(follower_id, followed_id):
@@ -336,6 +361,7 @@ def serialize_post(post, viewer=None):
         "title": post.title,
         "body_text": post.body_text,
         "media_keys": post.media_keys.split(",") if post.media_keys else [],
+        "media": serializers.media_urls(post.media_keys) if post.media_keys else [],
         "audience": post.audience,
         "community_id": post.community_id,
         "group_id": post.group_id,
@@ -358,8 +384,20 @@ def serialize_post(post, viewer=None):
     if viewer:
         data["my_reaction"] = get_user_reaction_on_post(viewer.id, post.id)
         data["saved"] = SavedPost.query.filter_by(user_id=viewer.id, post_id=post.id).first() is not None
-        from app.models.social import Follow
         data["author_followed"] = is_following(viewer.id, post.author_id)
+    if post.entity_ref_type == "poll" and post.entity_ref_id:
+        from app.services import social_service
+
+        try:
+            data["poll"] = social_service.poll_results(post.entity_ref_id)
+        except Exception:
+            data["poll"] = None
+    elif post.entity_ref_type == "event" and post.entity_ref_id:
+        from app.models.social import Event
+
+        event = db.session.get(Event, post.entity_ref_id)
+        if event is not None:
+            data["event"] = event.to_dict()
     return data
 
 

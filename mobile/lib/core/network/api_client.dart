@@ -99,6 +99,16 @@ class ApiClient {
     return (res.data as Map<String, dynamic>);
   }
 
+  Future<Map<String, dynamic>> putJson(String path, Object? body) async {
+    final res = await _dio.put(path, data: body);
+    return (res.data as Map<String, dynamic>);
+  }
+
+  Future<Map<String, dynamic>> deleteJson(String path, Object? body) async {
+    final res = await _dio.delete(path, data: body);
+    return (res.data as Map<String, dynamic>);
+  }
+
   Future<void> delete(String path) async {
     await _dio.delete(path);
   }

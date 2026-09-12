@@ -23,11 +23,16 @@ def create_status(user, payload):
     ttl_hours = int(current_app.config.get("STATUS_TTL_HOURS", 24))
     expires_at = utcnow() + timedelta(hours=payload.get("ttl_hours", ttl_hours))
 
+    media_keys = payload.get("media_keys")
+    media_key = payload.get("media_key")
+    if isinstance(media_keys, list):
+        media_key = ",".join(k for k in media_keys if k)
+
     status = Status(
         author_id=user.id,
         status_type=status_type,
         body_text=payload.get("body_text", ""),
-        media_key=payload.get("media_key"),
+        media_key=media_key,
         template_kind=payload.get("template_kind"),
         listing_id=payload.get("listing_id"),
         product_id=payload.get("product_id"),
@@ -36,6 +41,10 @@ def create_status(user, payload):
     )
     db.session.add(status)
     db.session.flush()
+
+    if media_key:
+        for key in [k.strip() for k in media_key.split(",") if k.strip()]:
+            _attach_key(user, key, "STATUS", status.id)
 
     audience = payload.get("audience", {"scope": "EVERYONE"})
     scope = audience.get("scope", "EVERYONE")
@@ -50,6 +59,35 @@ def create_status(user, payload):
     db.session.flush()
     realtime.emit_to_user(user.id, "status.created", {"status_id": status.id})
     return status
+
+
+def _attach_key(user, storage_key, context_type, context_id):
+    """Best-effort attach of an uploaded file to a status context."""
+    from app.models.media import MediaAsset
+    from app.services import media_service
+
+    if not storage_key:
+        return
+    asset = MediaAsset.query.filter_by(storage_key=storage_key).first()
+    if asset is not None and asset.owner_id == user.id:
+        try:
+            media_service.attach_asset(user, asset.id, context_type, context_id)
+        except Exception:
+            db.session.rollback()
+
+
+def status_json(status, viewer=None):
+    """Serialise a status with media URLs resolved from storage keys."""
+    from app.services import media_service
+
+    data = status.to_dict()
+    keys = [k.strip() for k in (status.media_key or "").split(",") if k.strip()]
+    data["media_keys"] = keys
+    try:
+        data["media"] = media_service.resolve_keys(status.author, keys)
+    except Exception:
+        data["media"] = []
+    return data
 
 
 def visible_statuses(viewer, author_ids=None):

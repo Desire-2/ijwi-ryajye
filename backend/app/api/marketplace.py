@@ -99,6 +99,36 @@ def add_listing_media(listing_id):
     return {"added": added}
 
 
+class RemoveListingMediaSchema(ma.Schema):
+    storage_keys = ma.fields.List(ma.fields.String(), required=True)
+
+
+class ReorderListingMediaSchema(ma.Schema):
+    storage_keys = ma.fields.List(ma.fields.String(), required=True)
+
+
+@jwt_required()
+def remove_listing_media(listing_id):
+    user = get_current_user()
+    data = parse_body(RemoveListingMediaSchema)
+    removed = listing_service.remove_listing_media(
+        user, listing_id, data["storage_keys"]
+    )
+    db.session.commit()
+    return {"removed": removed}
+
+
+@jwt_required()
+def reorder_listing_media(listing_id):
+    user = get_current_user()
+    data = parse_body(ReorderListingMediaSchema)
+    count = listing_service.reorder_listing_media(
+        user, listing_id, data["storage_keys"]
+    )
+    db.session.commit()
+    return {"ordered": count}
+
+
 @jwt_required()
 def publish_listing(listing_id):
     """Activate a seller's draft: validate, create inventory, go live."""
@@ -222,11 +252,40 @@ def get_listing(listing_id):
     db.session.commit()
     seller = db.session.get(User, listing.seller_id)
     data = listing_json(listing, seller)
-    data["media"] = [
-        {"type": m.media_type, "storage_key": m.storage_key, "caption": m.caption}
-        for m in ListingMedia.query.filter_by(listing_id=listing.id).all()
-    ]
+    data["media"] = _listing_media_json(listing.id)
     return {"listing": data}
+
+
+def _listing_media_json(listing_id):
+    from app.services import media_service
+
+    out = []
+    for m in (
+        ListingMedia.query.filter_by(listing_id=listing_id)
+        .order_by(ListingMedia.position, ListingMedia.created_at)
+        .all()
+    ):
+        item = {
+            "id": m.id,
+            "type": m.media_type,
+            "storage_key": m.storage_key,
+            "caption": m.caption,
+            "position": m.position,
+        }
+        asset = media_service.find_asset_by_key(m.storage_key)
+        if asset is not None:
+            item["media_id"] = asset.id
+            obj = media_service._asset_json(asset)
+            item["url"] = obj["url"]
+            if "thumbnail_url" in obj:
+                item["thumbnail_url"] = obj["thumbnail_url"]
+            item["width"] = asset.width
+            item["height"] = asset.height
+            item["content_type"] = asset.content_type
+        else:
+            item["url"] = f"{request.host_url}media/serve/{m.storage_key}"
+        out.append(item)
+    return out
 
 
 class BuyerRequestSchema(ma.Schema):

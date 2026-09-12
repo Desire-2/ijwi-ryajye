@@ -183,8 +183,31 @@ def upload_file(category):
     if file is None:
         raise bad_request("A 'file' part is required")
     stored = storage_service.store_upload(user, file, category)
+    asset = media_recorder(user, file, category, stored)
     db.session.commit()
-    return stored, 201
+    result = dict(stored)
+    result.update({
+        "id": asset.id,
+        "url": f"{request.host_url}media/serve/{stored['storage_key']}",
+        "thumbnail_url": asset.thumbnail_key and f"{request.host_url}media/serve/{asset.thumbnail_key}" or None,
+        "media_type": asset.media_type,
+    })
+    return result, 201
+
+
+def media_recorder(user, file_storage, category, stored):
+    from app.services import media_service
+
+    asset = media_service.record_upload(
+        user,
+        storage_key=stored["storage_key"],
+        content_type=stored["content_type"],
+        category=category,
+        file_name=file_storage.filename or "",
+        size_bytes=stored["size_bytes"],
+    )
+    media_service.expire_detached()
+    return asset
 
 
 def health():

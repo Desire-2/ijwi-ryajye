@@ -67,9 +67,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
 
   Future<void> _loadOpportunities() async {
     try {
-      final opps = await ref
-          .read(communityServiceProvider)
-          .listBuyerRequests();
+      final opps = await ref.read(communityServiceProvider).listBuyerRequests();
       if (!mounted) return;
       setState(() => _opportunities = opps);
     } catch (_) {}
@@ -148,8 +146,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
                       return const SizedBox.shrink();
                     }
                     final p = posts[idx];
-                    return PostCard(
-                        post: p, onChanged: _updatePost);
+                    return PostCard(post: p, onChanged: _updatePost);
                   },
                 ),
     );
@@ -186,18 +183,49 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
   }
 
   Widget _statusRow(BuildContext context, List<StatusData> statuses) {
-    final visible =
-        statuses.where((s) => !s.viewed).take(12).toList();
-    if (visible.isEmpty) return const SizedBox.shrink();
+    final visible = statuses.where((s) => !s.viewed).take(12).toList();
+    if (statuses.isEmpty) return const SizedBox.shrink();
     return SizedBox(
       height: 96,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: visible.length,
+        itemCount: visible.length + 1,
         separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (context, i) {
-          final s = visible[i];
+          if (i == 0) {
+            return GestureDetector(
+              onTap: () => context.push('/community/status/new'),
+              child: Column(children: [
+                Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border:
+                        Border.all(color: IjwiColors.greenLight, width: 2.5),
+                  ),
+                  child: const CircleAvatar(
+                    radius: 24,
+                    backgroundColor: IjwiColors.greenLight,
+                    child:
+                        Icon(Icons.add, color: IjwiColors.greenDark, size: 26),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const SizedBox(
+                  width: 60,
+                  child: Text(
+                    'Add',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 11),
+                  ),
+                ),
+              ]),
+            );
+          }
+          final s = visible[i - 1];
           return GestureDetector(
             onTap: () => context.push('/community/statuses'),
             child: Column(children: [
@@ -245,8 +273,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
               onAction: () => context.push('/community/discover')),
           _recommendedRow(context),
           SectionHeader('Your groups',
-              actionLabel: 'Create',
-              onAction: _createGroup),
+              actionLabel: 'Create', onAction: _createGroup),
           if (_groups == null)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
@@ -297,9 +324,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
         const Text(
           'Your Agriculture Network',
           style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w900),
+              color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 4),
         const Text(
@@ -360,8 +385,8 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
                     '${o.product ?? ''}${o.quantityValue != null ? ' · ${_num(o.quantityValue!)} ${o.unitCode}' : ''}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 12, color: IjwiColors.muted)),
+                    style:
+                        const TextStyle(fontSize: 12, color: IjwiColors.muted)),
               ],
             ),
           );
@@ -447,12 +472,11 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
                 icon: const Icon(Icons.chevron_right),
                 onPressed: () => context.push('/community/group/${g.id}'))
             : OutlinedButton(
-                style: OutlinedButton.styleFrom(minimumSize: const Size(70, 34)),
+                style:
+                    OutlinedButton.styleFrom(minimumSize: const Size(70, 34)),
                 onPressed: () async {
                   try {
-                    await ref
-                        .read(communityServiceProvider)
-                        .joinGroup(g.id);
+                    await ref.read(communityServiceProvider).joinGroup(g.id);
                     await _load();
                   } catch (_) {}
                 },
@@ -468,8 +492,8 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
         leading: const CircleAvatar(
             backgroundColor: Color(0xFFEDE9FE),
             child: Icon(Icons.campaign_outlined, color: IjwiColors.blue)),
-        title: Text(ch.name,
-            style: const TextStyle(fontWeight: FontWeight.w700)),
+        title:
+            Text(ch.name, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Text('${ch.subscriberCount} followers'),
         trailing: ch.followed
             ? const Icon(Icons.check, color: IjwiColors.green)
@@ -497,24 +521,28 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
       isScrollControlled: true,
       builder: (context) => Padding(
         padding: EdgeInsets.only(
-            left: 20, right: 20, top: 20,
+            left: 20,
+            right: 20,
+            top: 20,
             bottom: MediaQuery.of(context).viewInsets.bottom + 20),
-        child: Column(mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const Text('Create a group',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 14),
-          TextField(
-            controller: nameCtl,
-            textCapitalization: TextCapitalization.words,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: 'Group name'),
-          ),
-          const SizedBox(height: 16),
-          FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Create')),
-        ]),
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('Create a group',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 14),
+              TextField(
+                controller: nameCtl,
+                textCapitalization: TextCapitalization.words,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Group name'),
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Create')),
+            ]),
       ),
     );
     if (created != true || nameCtl.text.trim().length < 2) return;
@@ -524,8 +552,8 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
       await _load();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(ApiClient.errorMessage(e))));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
       }
     }
   }

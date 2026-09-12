@@ -123,6 +123,7 @@ def create_listing(seller, payload):
     db.session.flush()
 
     for i, media in enumerate(payload.get("media", [])):
+        _attach_listing_asset(seller, media["storage_key"], listing.id)
         db.session.add(
             ListingMedia(
                 listing_id=listing.id,
@@ -158,8 +159,72 @@ def add_listing_media(user, listing_id, media_items):
             position=existing + i,
             caption=media.get("caption", ""),
         ))
+        _attach_listing_asset(user, storage_key, listing.id)
     db.session.flush()
     return len(media_items)
+
+
+def remove_listing_media(user, listing_id, storage_keys):
+    """Detach photos from a listing the user owns and drop their rows."""
+    listing = get_listing_or_404(listing_id)
+    if listing.seller_id != user.id and "ADMIN" not in user.role_codes():
+        raise forbidden("You can only remove media from your own listings.")
+    wanted = {k for k in (storage_keys or []) if k}
+    if not wanted:
+        return 0
+    rows = ListingMedia.query.filter_by(listing_id=listing.id).all()
+    removed = 0
+    for row in rows:
+        if row.storage_key in wanted:
+            db.session.delete(row)
+            removed += 1
+    if removed:
+        _reindex_media(listing.id)
+    db.session.flush()
+    return removed
+
+
+def reorder_listing_media(user, listing_id, storage_keys):
+    """Set the display order (cover first) of a listing's attached photos."""
+    listing = get_listing_or_404(listing_id)
+    if listing.seller_id != user.id and "ADMIN" not in user.role_codes():
+        raise forbidden("You can only reorder media on your own listings.")
+    rows = ListingMedia.query.filter_by(listing_id=listing.id).all()
+    by_key = {row.storage_key: row for row in rows}
+    order = 0
+    for key in storage_keys or []:
+        row = by_key.pop(key, None)
+        if row is not None:
+            row.position = order
+            order += 1
+    # Keys that were not mentioned keep their relative order after the rest.
+    for row in sorted(by_key.values(), key=lambda r: (r.position or 0, r.created_at)):
+        row.position = order
+        order += 1
+    db.session.flush()
+    return order
+
+
+def _reindex_media(listing_id):
+    rows = (
+        ListingMedia.query.filter_by(listing_id=listing_id)
+        .order_by(ListingMedia.position, ListingMedia.created_at)
+        .all()
+    )
+    for i, row in enumerate(rows):
+        row.position = i
+
+
+def _attach_listing_asset(user, storage_key, listing_id):
+    from app.models.media import MediaAsset
+    from app.services import media_service
+
+    asset = MediaAsset.query.filter_by(storage_key=storage_key, deleted_at=None).first()
+    if asset is not None and asset.owner_id == user.id:
+        try:
+            media_service.attach_asset(user, asset.id, "LISTING", listing_id)
+        except Exception:
+            db.session.rollback()
 
 
 def publish_listing(user, listing_id):

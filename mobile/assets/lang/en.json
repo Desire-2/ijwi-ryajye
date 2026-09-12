@@ -138,5 +138,12 @@
   "market_no_offers": "No offers yet",
   "market_no_orders": "No orders here",
   "market_no_favorites": "No saved products yet",
-  "market_no_results": "No results"
+  "market_no_results": "No results",
+  "add_media": "Add media",
+  "camera": "Camera",
+  "gallery": "Gallery",
+  "video": "Video",
+  "document": "Document",
+  "voice": "Voice",
+  "share_product": "Share product"
 }

@@ -31,7 +31,7 @@ class BaseConfig:
 
     CORS_ORIGINS = [o for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o]
 
-    STORAGE_DRIVER = os.environ.get("STORAGE_DRIVER", "local")
+    STORAGE_DRIVER = os.environ.get("STORAGE_DRIVER") or os.environ.get("STORAGE_BACKEND", "local")
     STORAGE_BUCKET = os.environ.get("STORAGE_BUCKET", "ijwi-media")
     STORAGE_LOCAL_ROOT = os.environ.get("STORAGE_LOCAL_ROOT", "/tmp/opencode/ijwi-storage")
     S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL", "")
@@ -39,6 +39,10 @@ class BaseConfig:
     AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
     AWS_REGION = os.environ.get("AWS_REGION", "af-south-1")
     MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))
+
+    MEDIA_THUMBNAIL_EDGE = int(os.environ.get("MEDIA_THUMBNAIL_EDGE", "480"))
+    MEDIA_THUMBNAIL_QUALITY = int(os.environ.get("MEDIA_THUMBNAIL_QUALITY", "82"))
+    TEMP_MEDIA_TTL_HOURS = int(os.environ.get("TEMP_MEDIA_TTL_HOURS", "24"))
 
     SMS_PROVIDER = os.environ.get("SMS_PROVIDER", "console")
     SMS_SENDER_ID = os.environ.get("SMS_SENDER_ID", "IJWI")

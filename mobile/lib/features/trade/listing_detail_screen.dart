@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/i18n/i18n_provider.dart';
+import '../../core/media/media_models.dart';
+import '../../core/media/media_repository.dart';
+import '../../core/media/media_widgets.dart';
 import '../../core/network/api_client.dart';
 import '../../core/theme/design_system.dart';
 import '../../core/utils/money.dart';
@@ -33,6 +36,7 @@ class ListingDetailScreen extends ConsumerStatefulWidget {
 class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
     with MarketRealtime {
   Listing? _listing;
+  List<ListingMedia> _listingMedia = const [];
   List<Bid> _bids = const [];
   String? _error;
   bool _busy = false;
@@ -41,10 +45,11 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
   Future<void> _load() async {
     final repo = ref.read(marketplaceRepositoryProvider);
     try {
-      final (l, _) = await repo.listing(widget.listingId);
+      final (l, media) = await repo.listing(widget.listingId);
       if (mounted) {
         setState(() {
           _listing = l;
+          _listingMedia = media;
           _error = null;
         });
       }
@@ -62,8 +67,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
     try {
       final favs = await ref.read(marketplaceRepositoryProvider).favorites();
       if (mounted) {
-        setState(
-            () => _favorited = favs.any((f) => f.id == widget.listingId));
+        setState(() => _favorited = favs.any((f) => f.id == widget.listingId));
       }
     } catch (_) {
       if (mounted) setState(() => _favorited = false);
@@ -101,7 +105,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
       setState(() => l.auctionEndAt = endAt);
     }
     try {
-      final bids = await ref.read(marketplaceRepositoryProvider).bids(widget.listingId);
+      final bids =
+          await ref.read(marketplaceRepositoryProvider).bids(widget.listingId);
       if (mounted && _listing?.id == widget.listingId) {
         setState(() => _bids = bids);
       }
@@ -127,8 +132,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
               : 'Removed from favorites')));
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(ApiClient.errorMessage(e))));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
       }
     }
   }
@@ -161,8 +166,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
       context.push('/chat/$convId');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(ApiClient.errorMessage(e))));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -181,8 +186,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
       context.push('/orders/${order.id}');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(ApiClient.errorMessage(e))));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -208,16 +213,18 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(auction ? 'Place your bid' : 'Make an offer',
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.w800)),
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
             Text(l.productName,
                 style: const TextStyle(color: IjwiColors.muted, fontSize: 13)),
             const SizedBox(height: 14),
             TextField(
               controller: qtyCtl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(labelText: 'Quantity (${l.unitCode})'),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration:
+                  InputDecoration(labelText: 'Quantity (${l.unitCode})'),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -275,8 +282,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
       await _load();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(ApiClient.errorMessage(e))));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -293,8 +300,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
       context.push('/orders/${order.id}');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(ApiClient.errorMessage(e))));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -330,8 +337,10 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
           ? ListView(children: [ErrorBox(_error!, onRetry: _load)])
           : l == null
               ? ListView(padding: const EdgeInsets.all(14), children: const [
-                  Skeleton(height: 200), SizedBox(height: 10),
-                  Skeleton(height: 90), SizedBox(height: 10),
+                  Skeleton(height: 200),
+                  SizedBox(height: 10),
+                  Skeleton(height: 90),
+                  SizedBox(height: 10),
                   Skeleton(height: 120),
                 ])
               : RefreshIndicator(
@@ -366,6 +375,9 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
   }
 
   Widget _hero(Listing l) {
+    if (_listingMedia.isNotEmpty) {
+      return _mediaGallery(l, _listingMedia);
+    }
     return Container(
       height: 190,
       width: double.infinity,
@@ -380,8 +392,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
               bottom: 12,
               left: 12,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                     color: IjwiColors.amber.withOpacity(0.9),
                     borderRadius: BorderRadius.circular(8)),
@@ -395,6 +406,53 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
     );
   }
 
+  /// Pageable photo/video strip for the listing's uploaded media. Tapping a
+  /// frame opens the fullscreen viewer (shared media backbone).
+  Widget _mediaGallery(Listing l, List<ListingMedia> media) {
+    final localStorage = ref.read(mediaRepositoryProvider);
+    final remotes = media
+        .map((m) => RemoteMedia(
+              id: m.storageKey,
+              storageKey: m.storageKey,
+              url: localStorage.assetUrl(m.storageKey),
+              mediaType: m.type == 'video' ? 'VIDEO' : 'IMAGE',
+            ))
+        .toList();
+    return SizedBox(
+      height: 210,
+      width: double.infinity,
+      child: Stack(children: [
+        Positioned.fill(
+          child: PageView.builder(
+            itemCount: remotes.length,
+            itemBuilder: (context, i) => GestureDetector(
+              onTap: () =>
+                  showFullscreenMediaViewer(context, remotes, initialIndex: i),
+              child: IjwiImage(url: remotes[i].url, fit: BoxFit.cover),
+            ),
+          ),
+        ),
+        Positioned(top: 12, left: 12, child: AvailabilityBadge(l)),
+        Positioned(top: 12, right: 12, child: ListingTypeBadge(l)),
+        if (remotes.length > 1)
+          Positioned(
+              bottom: 10,
+              right: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.55),
+                    borderRadius: BorderRadius.circular(20)),
+                child: Text('1/${remotes.length}',
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white)),
+              )),
+      ]),
+    );
+  }
+
   Widget _mainInfo(Listing l) {
     return Card(
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 6),
@@ -402,7 +460,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(l.title,
-              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+              style:
+                  const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
           Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
             if (l.priceMinor != null)
@@ -411,7 +470,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
                 style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w900,
-                    color: l.isAuction ? IjwiColors.amber : IjwiColors.greenDark),
+                    color:
+                        l.isAuction ? IjwiColors.amber : IjwiColors.greenDark),
               )
             else
               const Text('Price negotiable',
@@ -428,13 +488,14 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
             '${formatQuantity(l.availableQuantity, l.unitCode)} available'
             '${l.soldQuantity > 0 ? ' · ${formatQuantity(l.soldQuantity, l.unitCode)} sold' : ''}',
             style: const TextStyle(
-                fontSize: 13, color: IjwiColors.muted, fontWeight: FontWeight.w600),
+                fontSize: 13,
+                color: IjwiColors.muted,
+                fontWeight: FontWeight.w600),
           ),
           if (l.variety.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text('Variety: ${l.variety}',
-                style:
-                    const TextStyle(fontSize: 13, color: IjwiColors.muted)),
+                style: const TextStyle(fontSize: 13, color: IjwiColors.muted)),
           ],
         ]),
       ),
@@ -460,21 +521,25 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
           const SizedBox(height: 12),
           Row(children: [
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Current highest bid',
-                    style: TextStyle(fontSize: 12, color: IjwiColors.muted)),
-                Text(
-                  winning != null
-                      ? formatMoney(winning.amountMinor, winning.currencyCode)
-                      : l.priceMinor != null
-                          ? '${formatMoney(l.priceMinor!, l.currencyCode)} (start)'
-                          : 'No bids yet',
-                  style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      color: IjwiColors.amber),
-                ),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Current highest bid',
+                        style:
+                            TextStyle(fontSize: 12, color: IjwiColors.muted)),
+                    Text(
+                      winning != null
+                          ? formatMoney(
+                              winning.amountMinor, winning.currencyCode)
+                          : l.priceMinor != null
+                              ? '${formatMoney(l.priceMinor!, l.currencyCode)} (start)'
+                              : 'No bids yet',
+                      style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          color: IjwiColors.amber),
+                    ),
+                  ]),
             ),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               Text('${_bids.length} bids',
@@ -483,8 +548,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
               if (l.reservePriceMinor != null)
                 Text(
                   'Reserve ${(l.reservePriceMinor! / 100).toStringAsFixed(0)} ${l.currencyCode}',
-                  style: const TextStyle(
-                      fontSize: 11.5, color: IjwiColors.muted),
+                  style:
+                      const TextStyle(fontSize: 11.5, color: IjwiColors.muted),
                 ),
             ]),
           ]),
@@ -508,7 +573,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
         .where((e) => e.value != null && e.value.toString().trim().isNotEmpty)
         .toList();
     final hasDescription = l.description.trim().isNotEmpty;
-    final hasVariety = l.variety.trim().isNotEmpty && !attrs.any((e) => e.key == 'variety');
+    final hasVariety =
+        l.variety.trim().isNotEmpty && !attrs.any((e) => e.key == 'variety');
     if (!hasDescription && !hasVariety && attrs.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -567,7 +633,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
         'Maximum order':
             '${l.maximumOrderValue!.toStringAsFixed(l.maximumOrderValue == l.maximumOrderValue!.roundToDouble() ? 0 : 2)} ${l.unitCode}',
       if (l.deliveryOptions.isNotEmpty)
-        'Delivery': l.deliveryOptions.map((d) => d.replaceAll('_', ' ')).join(', '),
+        'Delivery':
+            l.deliveryOptions.map((d) => d.replaceAll('_', ' ')).join(', '),
       if (l.negotiable) 'Negotiable': 'Yes',
     };
     if (rows.isEmpty) return const SizedBox.shrink();
@@ -582,7 +649,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
           for (final e in rows.entries)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              child:
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 SizedBox(
                   width: 118,
                   child: Text(e.key,
@@ -610,14 +678,16 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Text(s?.fullName ?? 'Seller',
-                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+                style:
+                    const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
             if (s?.isVerified == true) ...[
               const SizedBox(width: 6),
               const VerificationBadge(),
             ],
           ]),
           const SizedBox(height: 6),
-          SellerRow(seller: s,
+          SellerRow(
+              seller: s,
               onTap: s != null
                   ? () => context.push('/community/farmer/${s.id}')
                   : null),
@@ -625,7 +695,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
           Row(children: [
             Expanded(
               child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(44)),
+                style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(44)),
                 onPressed: _busy ? null : _messageSeller,
                 icon: const Icon(Icons.chat_bubble_outline, size: 18),
                 label: const Text('Message'),
@@ -634,7 +705,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
             const SizedBox(width: 10),
             Expanded(
               child: OutlinedButton(
-                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(44)),
+                style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(44)),
                 onPressed: s != null
                     ? () => context.push('/community/farmer/${s.id}')
                     : null,
@@ -668,15 +740,14 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
               title: Text(formatMoney(b.amountMinor, b.currencyCode),
                   style: const TextStyle(
                       fontWeight: FontWeight.w800, fontSize: 14)),
-              subtitle: Text(
-                  '${formatQuantity(b.quantityValue, b.unitCode)}'
+              subtitle: Text('${formatQuantity(b.quantityValue, b.unitCode)}'
                   '${b.isWinning ? ' · leading' : ''}'
                   '${b.bidderId == me?.id ? ' · you' : ''}'),
               trailing: timeAgoIso(b.placedAt).isEmpty
                   ? null
                   : Text(timeAgoIso(b.placedAt),
-                      style:
-                          const TextStyle(fontSize: 11, color: IjwiColors.muted)),
+                      style: const TextStyle(
+                          fontSize: 11, color: IjwiColors.muted)),
             ),
         ]),
       ),
@@ -703,7 +774,10 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
           ),
           IconButton(
             tooltip: 'Message',
-            icon: Icon(isMyListing ? Icons.visibility_outlined : Icons.chat_bubble_outline,
+            icon: Icon(
+                isMyListing
+                    ? Icons.visibility_outlined
+                    : Icons.chat_bubble_outline,
                 color: IjwiColors.green),
             onPressed: isMyListing ? null : _messageSeller,
           ),
@@ -736,9 +810,10 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
                       child: FilledButton(
                         onPressed: !lActive || _busy
                             ? null
-                            : () => _buyNow(quantity: l.minimumOrderValue > 0
-                                ? l.minimumOrderValue
-                                : 10),
+                            : () => _buyNow(
+                                quantity: l.minimumOrderValue > 0
+                                    ? l.minimumOrderValue
+                                    : 10),
                         child: Text(l.listingType == 'FORWARD_CONTRACT'
                             ? 'Reserve harvest'
                             : 'Buy now'),
@@ -754,4 +829,4 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen>
 
 extension _FirstOrNull<T> on Iterable<T> {
   T? get firstOrNull => isEmpty ? null : first;
-}
+}

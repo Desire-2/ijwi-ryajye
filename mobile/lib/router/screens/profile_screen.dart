@@ -3,6 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/i18n/i18n_provider.dart';
+import '../../core/media/media_models.dart';
+import '../../core/media/media_picker.dart';
+import '../../core/media/media_repository.dart';
+import '../../core/media/media_widgets.dart';
+import '../../core/network/api_client.dart';
 import '../../core/theme/design_system.dart';
 import '../../features/auth/auth_controller.dart';
 
@@ -22,41 +27,34 @@ class ProfileScreen extends ConsumerWidget {
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(children: [
-              CircleAvatar(
-                radius: 26,
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                child: Text((user?.fullName.isNotEmpty == true
-                        ? user!.fullName[0]
-                        : '?')
-                    .toUpperCase(),
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800)),
-              ),
+              _ProfilePhoto(
+                  photoUrl: user?.profilePhotoUrl,
+                  onTap: () => _changePhoto(context, ref)),
               const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment:
-                  CrossAxisAlignment.start, children: [
-                Text(user?.fullName ?? '—',
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 16)),
-                Text('${user?.phone ?? ''}',
-                    style: const TextStyle(color: IjwiColors.muted)),
-                Container(
-                  margin: const EdgeInsets.only(top: 5),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                      color: IjwiColors.greenLight,
-                      borderRadius: BorderRadius.circular(10)),
-                  child: Text(user?.primaryRole ?? '',
-                      style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: IjwiColors.greenDark)),
-                ),
-              ])),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(user?.fullName ?? '—',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 16)),
+                    Text('${user?.phone ?? ''}',
+                        style: const TextStyle(color: IjwiColors.muted)),
+                    Container(
+                      margin: const EdgeInsets.only(top: 5),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                          color: IjwiColors.greenLight,
+                          borderRadius: BorderRadius.circular(10)),
+                      child: Text(user?.primaryRole ?? '',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: IjwiColors.greenDark)),
+                    ),
+                  ])),
             ]),
           ),
         ),
@@ -133,8 +131,7 @@ class ProfileScreen extends ConsumerWidget {
         const Divider(height: 32),
         ListTile(
           leading: const Icon(Icons.logout, color: IjwiColors.red),
-          title: const Text('Log out',
-              style: TextStyle(color: IjwiColors.red)),
+          title: const Text('Log out', style: TextStyle(color: IjwiColors.red)),
           onTap: () async {
             final confirmed = await showDialog<bool>(
               context: context,
@@ -164,6 +161,104 @@ class ProfileScreen extends ConsumerWidget {
         ),
       ]),
     );
+  }
+}
+
+/// Avatar with a camera overlay. Tapping lets the user take or pick a photo,
+/// which uploads through the shared [MediaRepository] and PATCHes the
+/// profile key.
+class _ProfilePhoto extends ConsumerWidget {
+  const _ProfilePhoto({required this.photoUrl, required this.onTap});
+
+  final String? photoUrl;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final Widget avatar;
+    if (photoUrl != null && photoUrl!.isNotEmpty) {
+      final url = ref.read(mediaRepositoryProvider).resolveUrl(photoUrl!);
+      avatar = CircleAvatar(
+        radius: 26,
+        child: ClipOval(
+          child: SizedBox(
+            width: 52,
+            height: 52,
+            child: IjwiImage(url: url, fit: BoxFit.cover),
+          ),
+        ),
+      );
+    } else {
+      avatar = CircleAvatar(
+        radius: 26,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        child: Text(_initial(ref),
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w800)),
+      );
+    }
+    return Stack(clipBehavior: Clip.none, children: [
+      GestureDetector(onTap: onTap, child: avatar),
+      Positioned(
+        right: -2,
+        bottom: -2,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: IjwiColors.greenDark,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 2),
+            ),
+            child: const Icon(Icons.photo_camera_outlined,
+                size: 14, color: Colors.white),
+          ),
+        ),
+      ),
+    ]);
+  }
+
+  String _initial(WidgetRef ref) =>
+      (ref.read(authProvider).valueOrNull?.fullName.isNotEmpty == true
+              ? ref.read(authProvider).valueOrNull!.fullName[0]
+              : '?')
+          .toUpperCase();
+}
+
+Future<void> _changePhoto(BuildContext context, WidgetRef ref) async {
+  final action = await showMediaPickerSheet(context,
+      actions: const [MediaPickAction.camera, MediaPickAction.gallery]);
+  if (action == null || !context.mounted) return;
+  try {
+    LocalMediaItem? picked;
+    if (action == MediaPickAction.camera) {
+      final perm = await ref.read(mediaPermissionsProvider).camera();
+      if (perm != PermissionState.granted) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Camera permission is required to take a profile photo.')));
+        }
+        return;
+      }
+      picked = await ref.read(mediaPickerProvider).takePhoto();
+    } else {
+      final photos = await ref.read(mediaPickerProvider).pickImages(limit: 1);
+      picked = photos.isEmpty ? null : photos.first;
+    }
+    if (picked == null) return;
+    final media = await ref.read(mediaRepositoryProvider).upload(picked);
+    if (!context.mounted) return;
+    await ref.read(authProvider.notifier).updateProfilePhoto(media.storageKey);
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:
+              Text('Could not update photo: ${ApiClient.errorMessage(e)}')));
+    }
   }
 }
 

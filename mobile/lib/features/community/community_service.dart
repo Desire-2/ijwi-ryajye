@@ -16,17 +16,18 @@ class CommunityService {
   Future<List<CommunityProfile>> listCommunities({String? type}) async {
     final res = await _api.getJson('/communities',
         query: type != null ? {'type': type} : null);
-    final items = (res['communities'] as List? ??
-            res['items'] as List? ??
-            const [])
-        .map((j) => CommunityProfile.fromJson(j as Map<String, dynamic>))
-        .toList();
+    final items =
+        (res['communities'] as List? ?? res['items'] as List? ?? const [])
+            .map((j) => CommunityProfile.fromJson(j as Map<String, dynamic>))
+            .toList();
     return items;
   }
 
   Future<List<CommunityProfile>> recommendedCommunities() async {
     final res = await _api.getJson('/communities/recommended');
-    final raw = res['recommendations'] as List? ?? res['communities'] as List? ?? const [];
+    final raw = res['recommendations'] as List? ??
+        res['communities'] as List? ??
+        const [];
     return raw
         .map((j) => CommunityProfile.fromJson(j as Map<String, dynamic>))
         .toList();
@@ -38,10 +39,9 @@ class CommunityService {
 
   // ---- Groups ----
   Future<List<CommunityGroupProfile>> listGroups({String? q}) async {
-    final res = await _api.getJson('/groups', query: q != null ? {'q': q} : null);
-    final items = (res['groups'] as List? ??
-            res['items'] as List? ??
-            const [])
+    final res =
+        await _api.getJson('/groups', query: q != null ? {'q': q} : null);
+    final items = (res['groups'] as List? ?? res['items'] as List? ?? const [])
         .map((j) => CommunityGroupProfile.fromJson(j as Map<String, dynamic>))
         .toList();
     return items;
@@ -64,11 +64,10 @@ class CommunityService {
   // ---- Channels ----
   Future<List<ChannelProfile>> listChannels() async {
     final res = await _api.getJson('/channels');
-    final items = (res['channels'] as List? ??
-            res['items'] as List? ??
-            const [])
-        .map((j) => ChannelProfile.fromJson(j as Map<String, dynamic>))
-        .toList();
+    final items =
+        (res['channels'] as List? ?? res['items'] as List? ?? const [])
+            .map((j) => ChannelProfile.fromJson(j as Map<String, dynamic>))
+            .toList();
     return items;
   }
 
@@ -83,9 +82,7 @@ class CommunityService {
   Future<List<Post>> channelPosts(String channelId) async {
     final res = await _api.getJson('/channels/$channelId/posts');
     final items = res['posts'] as List? ?? res['items'] as List? ?? const [];
-    return items
-        .map((j) => Post.fromJson(j as Map<String, dynamic>))
-        .toList();
+    return items.map((j) => Post.fromJson(j as Map<String, dynamic>)).toList();
   }
 
   // ---- Posts / feed ----
@@ -111,9 +108,7 @@ class CommunityService {
 
     final res = await _api.getJson('/posts', query: query);
     final items = res['items'] as List? ?? res['posts'] as List? ?? const [];
-    return items
-        .map((j) => Post.fromJson(j as Map<String, dynamic>))
-        .toList();
+    return items.map((j) => Post.fromJson(j as Map<String, dynamic>)).toList();
   }
 
   Future<Post> getPost(String id) async {
@@ -152,9 +147,7 @@ class CommunityService {
   Future<List<Post>> savedPosts() async {
     final res = await _api.getJson('/posts/saved');
     final items = res['items'] as List? ?? const [];
-    return items
-        .map((j) => Post.fromJson(j as Map<String, dynamic>))
-        .toList();
+    return items.map((j) => Post.fromJson(j as Map<String, dynamic>)).toList();
   }
 
   Future<Map<String, dynamic>> reactToPost(String id, String emoji) async {
@@ -182,8 +175,10 @@ class CommunityService {
 
   Future<Comment> addComment(String postId, String body,
       {String? parentCommentId}) async {
-    final res = await _api.postJson('/posts/$postId/comments',
-        {'body_text': body, if (parentCommentId != null) 'parent_comment_id': parentCommentId});
+    final res = await _api.postJson('/posts/$postId/comments', {
+      'body_text': body,
+      if (parentCommentId != null) 'parent_comment_id': parentCommentId
+    });
     return Comment.fromJson((res['comment'] as Map<String, dynamic>?) ?? res);
   }
 
@@ -200,7 +195,8 @@ class CommunityService {
   }
 
   Future<void> markBestAnswer(String postId, String commentId) async {
-    await _api.postJson('/posts/$postId/best-answer', {'comment_id': commentId});
+    await _api
+        .postJson('/posts/$postId/best-answer', {'comment_id': commentId});
   }
 
   // ---- Follow ----
@@ -216,19 +212,21 @@ class CommunityService {
   Future<List<StatusData>> listStatuses() async {
     final res = await _api.getJson('/statuses');
     final items = res['statuses'] as List? ?? res['items'] as List? ?? const [];
-    return items.map((j) => StatusData.fromJson(j as Map<String, dynamic>)).toList();
+    return items
+        .map((j) => StatusData.fromJson(j as Map<String, dynamic>))
+        .toList();
   }
 
   Future<Map<String, dynamic>> createStatus({
     required String statusType,
     String? bodyText,
-    String? mediaKey,
+    List<String>? mediaKeys,
     String? listingId,
   }) async {
     return _api.postJson('/statuses', {
       'status_type': statusType,
       if (bodyText != null) 'body_text': bodyText,
-      if (mediaKey != null) 'media_key': mediaKey,
+      if (mediaKeys != null && mediaKeys.isNotEmpty) 'media_keys': mediaKeys,
       if (listingId != null) 'listing_id': listingId,
     });
   }
@@ -259,7 +257,8 @@ class CommunityService {
     return [];
   }
 
-  Future<Map<String, dynamic>> votePoll(String pollId, List<String> optionIds) async {
+  Future<Map<String, dynamic>> votePoll(
+      String pollId, List<String> optionIds) async {
     return _api.postJson('/polls/$pollId/vote', {'option_ids': optionIds});
   }
 
@@ -272,7 +271,9 @@ class CommunityService {
   Future<List<EventData>> listEvents() async {
     final res = await _api.getJson('/events');
     final items = res['events'] as List? ?? res['items'] as List? ?? const [];
-    return items.map((j) => EventData.fromJson(j as Map<String, dynamic>)).toList();
+    return items
+        .map((j) => EventData.fromJson(j as Map<String, dynamic>))
+        .toList();
   }
 
   Future<EventData> createEvent({
@@ -303,7 +304,8 @@ class CommunityService {
   // ---- Opportunities ----
   Future<List<Opportunity>> listOpportunities() async {
     final res = await _api.getJson('/opportunities');
-    final items = res['opportunities'] as List? ?? res['items'] as List? ?? const [];
+    final items =
+        res['opportunities'] as List? ?? res['items'] as List? ?? const [];
     return items
         .map((j) => Opportunity.fromJson(j as Map<String, dynamic>))
         .toList();
@@ -311,7 +313,8 @@ class CommunityService {
 
   Future<List<Opportunity>> listBuyerRequests() async {
     final res = await _api.getJson('/buyer-requests');
-    final items = res['buyer_requests'] as List? ?? res['items'] as List? ?? const [];
+    final items =
+        res['buyer_requests'] as List? ?? res['items'] as List? ?? const [];
     return items
         .map((j) => Opportunity.fromJson(j as Map<String, dynamic>))
         .toList();

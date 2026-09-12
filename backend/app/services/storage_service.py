@@ -14,8 +14,14 @@ ALLOWED_DOC = {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": b"PK",
 }
 ALLOWED_AUDIO = {"audio/mp4": None, "audio/aac": b"\xff\xfb", "audio/mpeg": b"ID3", "audio/ogg": b"OggS", "audio/webm": b"RIFF"}
+ALLOWED_VIDEO = {"video/mp4": None, "video/webm": b"RIFF", "video/quicktime": None, "video/3gpp": None}
 
-MAX_SIZES = {"image": 10 * 1024 * 1024, "document": 25 * 1024 * 1024, "voice": 15 * 1024 * 1024}
+MAX_SIZES = {
+    "image": 10 * 1024 * 1024,
+    "document": 25 * 1024 * 1024,
+    "voice": 15 * 1024 * 1024,
+    "video": 50 * 1024 * 1024,
+}
 
 
 def _driver():
@@ -23,10 +29,6 @@ def _driver():
     if driver == "local":
         return LocalDriver(current_app.config["STORAGE_LOCAL_ROOT"])
     if driver in ("s3", "minio"):
-        try:
-            from S3Driver import S3Driver
-        except ImportError:
-            pass
         return _s3_driver()
     raise not_configured("Storage")
 
@@ -103,8 +105,10 @@ def validate_upload(data: bytes, declared_content_type: str, category: str):
         allowed = ALLOWED_IMAGE
     elif category == "voice":
         allowed = ALLOWED_AUDIO
+    elif category == "video":
+        allowed = ALLOWED_VIDEO
     else:
-        allowed = {**ALLOWED_DOC, **ALLOWED_IMAGE}
+        allowed = {**ALLOWED_DOC, **ALLOWED_IMAGE, **ALLOWED_VIDEO}
 
     if declared_content_type in ("application/octet-stream", ""):
         for ct, magic in allowed.items():
@@ -129,6 +133,8 @@ def store_upload(user, file_storage, category):
         "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
         "application/pdf": ".pdf", "audio/mp4": ".m4a", "audio/mpeg": ".mp3",
         "audio/ogg": ".ogg", "audio/webm": ".webm", "audio/aac": ".aac",
+        "video/mp4": ".mp4", "video/webm": ".webm", "video/quicktime": ".mov",
+        "video/3gpp": ".3gp",
     }.get(content_type, "")
     key = f"{category}s/{user.id}/{secrets.token_hex(12)}{ext}"
     _driver().put(key, data, content_type)

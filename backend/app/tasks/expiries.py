@@ -15,7 +15,16 @@ def expire_marketplace_objects():
             "offers": expire_stale_offers(),
             "statuses": expire_statuses(),
             "listings": expire_listings(),
+            "media": cleanup_media_orphans(),
         }
+
+
+@celery.task(name="tasks.cleanup_media_orphans")
+def cleanup_media_orphans():
+    from app.services import media_service
+
+    with current_app.app_context():
+        return {"media_removed": media_service.cleanup_orphans()}
 
 
 @celery.task(name="tasks.dispatch_notification_batches")

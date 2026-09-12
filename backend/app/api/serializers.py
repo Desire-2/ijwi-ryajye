@@ -2,6 +2,12 @@ from app.models.identity import FarmerProfile, User, Verification
 from app.models.marketplace import Listing
 
 
+def _photo_url(user):
+    if not getattr(user, "profile_photo_key", None):
+        return None
+    return f"media/serve/{user.profile_photo_key}"
+
+
 def user_private(user):
     return {
         "id": user.id,
@@ -18,6 +24,7 @@ def user_private(user):
         "phone_verified": bool(user.phone_verified_at),
         "data_saver": user.data_saver,
         "transcription_opt_in": user.transcription_opt_in,
+        "profile_photo_url": _photo_url(user),
         "created_at": user.created_at.isoformat(),
     }
 
@@ -30,6 +37,7 @@ def farmer_card(user, profile=None):
         "full_name": user.full_name,
         "region": user.region,
         "district": None if not user.visibility_location_exact else user.district,
+        "profile_photo_url": _photo_url(user),
         "main_crops": [c for c in (profile.main_crops or "").split(",") if c] if profile else [],
         "years_experience": profile.years_experience if profile else 0,
         "rating_avg": float(profile.rating_avg or 0) if profile else 0,
@@ -49,6 +57,14 @@ def _attrs(raw):
         return data if isinstance(data, dict) else {}
     except (ValueError, TypeError):
         return {}
+
+
+def media_urls(media_keys):
+    """Resolve comma-separated storage keys into a list of media descriptors."""
+    from app.services import media_service
+
+    keys = [k.strip() for k in (media_keys or "").split(",") if k.strip()]
+    return media_service.resolve_keys(None, keys)
 
 
 def listing_json(listing, seller=None):

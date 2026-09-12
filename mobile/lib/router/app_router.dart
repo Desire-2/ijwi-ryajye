@@ -12,6 +12,7 @@ import '../../features/community/create_post_screen.dart';
 import '../../features/community/discover_screen.dart';
 import '../../features/community/opportunities_screen.dart';
 import '../../features/community/status_viewer_screen.dart';
+import '../../features/community/status_composer_screen.dart';
 import '../../features/community/group_detail_screen.dart';
 import '../../features/community/farmer_profile_screen.dart';
 import '../../features/community/post_detail_screen.dart';
@@ -22,7 +23,6 @@ import '../../features/market/market_screen.dart';
 import '../../features/market/search_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
-import '../../features/admin/admin_catalog_screen.dart';
 import '../../features/sell/create_listing_screen.dart';
 import '../../features/sell/listing_edit_screen.dart';
 import '../../features/sell/my_listings_screen.dart';
@@ -86,17 +86,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
               path: '/chats', builder: (_, __) => const ConversationsScreen()),
           GoRoute(
-              path: '/community',
-              builder: (_, __) => const CommunityScreen()),
-          GoRoute(
-              path: '/profile', builder: (_, __) => const ProfileScreen()),
+              path: '/community', builder: (_, __) => const CommunityScreen()),
+          GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
         ],
       ),
+      GoRoute(path: '/auth/login', builder: (_, __) => const LoginScreen()),
       GoRoute(
-          path: '/auth/login', builder: (_, __) => const LoginScreen()),
-      GoRoute(
-          path: '/auth/register',
-          builder: (_, __) => const RegisterScreen()),
+          path: '/auth/register', builder: (_, __) => const RegisterScreen()),
       GoRoute(
           path: '/auth/verify',
           builder: (context, state) {
@@ -106,45 +102,33 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
           path: '/listing/:id',
           builder: (context, state) =>
-              ListingDetailScreen(listingId: state.pathParameters['id']!)),      GoRoute(
-          path: '/offers', builder: (_, __) => const OffersScreen()),
+              ListingDetailScreen(listingId: state.pathParameters['id']!)),
+      GoRoute(path: '/offers', builder: (_, __) => const OffersScreen()),
       GoRoute(path: '/orders', builder: (_, __) => const OrdersScreen()),
       GoRoute(
           path: '/orders/:id',
-          builder: (context, state) => OrderDetailScreen(
-              orderId: state.pathParameters['id']!)),
+          builder: (context, state) =>
+              OrderDetailScreen(orderId: state.pathParameters['id']!)),
       GoRoute(path: '/wallet', builder: (_, __) => const WalletScreen()),
       // ---- Marketplace sub-routes ----
-      GoRoute(
-          path: '/market/search',
-          builder: (_, __) => const SearchScreen()),
+      GoRoute(path: '/market/search', builder: (_, __) => const SearchScreen()),
       GoRoute(
           path: '/market/requests',
           builder: (_, __) => const BuyerRequestsScreen()),
       GoRoute(
           path: '/market/favorites',
-          builder: (_, __) => const FavoritesScreen()),      GoRoute(
-          path: '/sell', builder: (_, __) => const MyListingsScreen()),
+          builder: (_, __) => const FavoritesScreen()),
+      GoRoute(path: '/sell', builder: (_, __) => const MyListingsScreen()),
       GoRoute(
-          path: '/sell/new',
-          builder: (context, state) => CreateListingScreen(
-              initialListingId: state.uri.queryParameters['id'])),
-      GoRoute(
-          path: '/sell/edit',
-          builder: (context, state) => ListingEditScreen(
-              listingId: state.uri.queryParameters['id'] ?? '')),
+          path: '/sell/new', builder: (_, __) => const CreateListingScreen()),
       GoRoute(
           path: '/sell/dashboard',
           builder: (_, __) => const SellerDashboardScreen()),
       GoRoute(
-          path: '/admin/catalog',
-          builder: (_, __) => const AdminCatalogScreen()),
-      GoRoute(
           path: '/intelligence',
           builder: (context, state) => IntelligenceHubScreen(
               initialTab:
-                  int.tryParse(state.uri.queryParameters['tab'] ?? '') ??
-                      0)),
+                  int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0)),
       GoRoute(
           path: '/notifications',
           builder: (_, __) => const NotificationsScreen()),
@@ -162,6 +146,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
           path: '/community/statuses',
           builder: (_, __) => const StatusViewerScreen()),
+      GoRoute(
+          path: '/community/status/new',
+          builder: (_, __) => const StatusComposerScreen()),
       GoRoute(
           path: '/community/opportunities',
           builder: (_, __) => const OpportunitiesScreen()),
@@ -190,8 +177,8 @@ final routerProvider = Provider<GoRouter>((ref) {
               FarmerProfileScreen(userId: state.pathParameters['id']!)),
       GoRoute(
           path: '/community/:id',
-          builder: (context, state) => CommunityProfileScreen(
-              communityId: state.pathParameters['id']!)),
+          builder: (context, state) =>
+              CommunityProfileScreen(communityId: state.pathParameters['id']!)),
     ],
   );
   return router;
